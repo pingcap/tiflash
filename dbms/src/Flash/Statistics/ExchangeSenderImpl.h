@@ -63,7 +63,7 @@ public:
     ExchangeSenderStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
 
 private:
-    UInt16 partition_num;
+    size_t partition_num;
     tipb::ExchangeType exchange_type;
     std::vector<Int64> sender_target_task_ids;
 

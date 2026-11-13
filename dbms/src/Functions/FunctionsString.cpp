@@ -42,6 +42,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
+extern const int BAD_ARGUMENTS;
 extern const int ILLEGAL_COLUMN;
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 extern const int ZERO_ARRAY_OR_TUPLE_INDEX;
@@ -3005,6 +3006,12 @@ private:
         case trim_trailing:
             executeTrim2Args(false, true, block, ColumnNumbers(arguments.begin(), arguments.end() - 1), result);
             break;
+        default:
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS,
+                "Invalid TRIM direction {} for function {}, expected a value between 0 and 3",
+                direction,
+                getName());
         }
     }
 
