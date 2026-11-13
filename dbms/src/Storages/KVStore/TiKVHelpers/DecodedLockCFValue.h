@@ -17,6 +17,11 @@
 #include <Common/Exception.h>
 #include <Core/Types.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+<<<<<<< HEAD
+=======
+#include <Storages/KVStore/Read/RegionLockInfo.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVKeyValue.h>
+>>>>>>> dc7d5a83a2 (fix: guard SEGMENT formatting and reject truncated CF values (#11310))
 
 namespace DB::RecordKVFormat
 {
