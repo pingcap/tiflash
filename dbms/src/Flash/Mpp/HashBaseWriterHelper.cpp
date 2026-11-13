@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <TiDB/Decode/TypeMapping.h>
+#include <common/likely.h>
+
+#include <limits>
 
 namespace DB::HashBaseWriterHelper
 {
@@ -43,8 +47,14 @@ std::vector<MutableColumns> createDestColumns(const Block & sample_block, size_t
     return dest_tbl_cols;
 }
 
-void fillSelector(size_t rows, const WeakHash32 & hash, uint32_t part_num, IColumn::Selector & selector)
+void fillSelector(size_t rows, const WeakHash32 & hash, size_t part_num, IColumn::Selector & selector)
 {
+    if (unlikely(part_num > std::numeric_limits<UInt64>::max() / std::numeric_limits<UInt32>::max()))
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "MPP partition count {} is too large for 64-bit hash scaling",
+            part_num);
+
     // fill selector array with most significant bits of hash values
     const auto & hash_data = hash.getData();
     RUNTIME_CHECK(rows == hash_data.size());
@@ -64,10 +74,16 @@ void fillSelector(size_t rows, const WeakHash32 & hash, uint32_t part_num, IColu
 void fillSelectorForFineGrainedShuffle(
     size_t rows,
     const WeakHash32 & hash,
-    uint32_t part_num,
+    size_t part_num,
     uint32_t fine_grained_shuffle_stream_count,
     IColumn::Selector & selector)
 {
+    if (unlikely(part_num > std::numeric_limits<UInt64>::max() / std::numeric_limits<UInt32>::max()))
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "MPP partition count {} is too large for 64-bit hash scaling",
+            part_num);
+
     // fill selector array with most significant bits of hash values
     const auto & hash_data = hash.getData();
     selector.resize(rows);
@@ -146,7 +162,7 @@ void scatterColumns(
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & collators,
     std::vector<String> & partition_key_containers,
-    uint32_t bucket_num,
+    size_t bucket_num,
     std::vector<std::vector<MutableColumnPtr>> & result_columns)
 {
     if unlikely (input_block.rows() == 0)
@@ -176,7 +192,7 @@ void scatterColumnsSelectiveBlock(
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & collators,
     std::vector<String> & partition_key_containers,
-    uint32_t bucket_num,
+    size_t bucket_num,
     std::vector<std::vector<MutableColumnPtr>> & result_columns)
 {
     RUNTIME_CHECK(input_block.info.selective && !input_block.info.selective->empty());
@@ -204,7 +220,7 @@ void scatterColumnsForFineGrainedShuffle(
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & collators,
     std::vector<String> & partition_key_containers,
-    uint32_t part_num,
+    size_t part_num,
     uint32_t fine_grained_shuffle_stream_count,
     WeakHash32 & hash,
     IColumn::Selector & selector,
@@ -232,7 +248,7 @@ void scatterColumnsForFineGrainedShuffleSelectiveBlock(
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & collators,
     std::vector<String> & partition_key_containers,
-    uint32_t part_num,
+    size_t part_num,
     uint32_t fine_grained_shuffle_stream_count,
     WeakHash32 & hash,
     IColumn::Selector & selector,

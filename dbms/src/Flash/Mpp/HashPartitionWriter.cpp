@@ -20,6 +20,9 @@
 #include <Flash/Mpp/HashPartitionWriter.h>
 #include <Flash/Mpp/MPPTunnelSetWriter.h>
 #include <TiDB/Decode/TypeMapping.h>
+#include <common/likely.h>
+
+#include <limits>
 
 namespace DB
 {
@@ -45,12 +48,11 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
     partition_num = writer_->getPartitionNum();
     RUNTIME_CHECK(partition_num > 0);
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
+    max_buffered_rows = max_buffered_rows_ > 0 ? static_cast<UInt64>(max_buffered_rows_) : 1;
 
     switch (data_codec_version)
     {
     case MPPDataPacketV0:
-        if (max_buffered_rows_ <= 0)
-            max_buffered_rows_ = 1;
         break;
     case MPPDataPacketV1:
     default:
@@ -59,7 +61,13 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
         if (max_buffered_rows_ <= 0)
         {
             // set upper limit if not specified
-            max_buffered_rows_ = 8 * 1024 * partition_num /* 8K * partition-num */;
+            constexpr UInt64 rows_per_partition = 8 * 1024;
+            if (unlikely(partition_num > std::numeric_limits<UInt64>::max() / rows_per_partition))
+                throw TiFlashException(
+                    Errors::Coprocessor::BadRequest,
+                    "MPP partition count {} overflows the default buffered-row limit",
+                    partition_num);
+            max_buffered_rows = rows_per_partition * partition_num;
         }
         for (const auto & field_type : dag_context.result_field_types)
         {
@@ -68,7 +76,6 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
         break;
     }
     }
-    max_buffered_rows = static_cast<UInt64>(max_buffered_rows_);
     max_buffered_bytes = max_buffered_bytes_;
 }
 
