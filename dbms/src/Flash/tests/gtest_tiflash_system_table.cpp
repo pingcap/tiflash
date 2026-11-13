@@ -56,6 +56,8 @@ TEST(TiFlashSystemTableQueryTest, AllowsTiDBSystemTableSelects)
         "SELECT * FROM system.dt_tables LIMIT 0, 1024",
         "SELECT * FROM system.dt_segments WHERE keyspace_id=1 LIMIT 0, 1024",
         "SELECT * FROM system.dt_local_indexes WHERE tidb_database IN ('db') AND tidb_table IN ('t') LIMIT 0, 1024",
+        "SELECT 1 FROM system.one WHERE 1 IN system.one",
+        "SELECT 1 FROM system.one WHERE 1 IN (1, 2)",
         "SELECT 1",
         "SELECT 1 UNION ALL SELECT 2",
     };
@@ -78,6 +80,30 @@ TEST(TiFlashSystemTableQueryTest, RejectsNonSelect)
 TEST(TiFlashSystemTableQueryTest, RejectsMultiStatement)
 {
     expectError("SELECT 1; DROP TABLE t", ErrorCodes::SYNTAX_ERROR);
+}
+
+TEST(TiFlashSystemTableQueryTest, RejectsTablesOutsideSystem)
+{
+    expectError("SELECT * FROM ks_1_db_2.t_3", ErrorCodes::READONLY);
+    expectError("SELECT * FROM dt_tables", ErrorCodes::READONLY);
+    expectError("SELECT * FROM system.dt_tables, ks_1_db_2.t_3", ErrorCodes::READONLY);
+    expectError(
+        "SELECT * FROM system.dt_tables WHERE tidb_table_id IN (SELECT 1 FROM ks_1_db_2.t_3)",
+        ErrorCodes::READONLY);
+    expectError("SELECT * FROM numbers(1)", ErrorCodes::READONLY);
+    expectError("SELECT 1 FROM system.one WHERE 1 IN ks_1_db_2.t_3", ErrorCodes::READONLY);
+    expectError("SELECT 1 FROM system.one WHERE 1 NOT IN ks_1_db_2.t_3", ErrorCodes::READONLY);
+    expectError("SELECT 1 FROM system.one WHERE 1 GLOBAL IN ks_1_db_2.t_3", ErrorCodes::READONLY);
+    expectError("SELECT 1 FROM system.one WHERE 1 IN t_3", ErrorCodes::READONLY);
+    expectError(
+        "SELECT hasColumnInTable('other_db', 't', 'secret') FROM system.dt_tables LIMIT 1",
+        ErrorCodes::READONLY);
+    expectError(
+        "SELECT HASCOLUMNINTABLE('other_db', 't', 'secret') FROM system.dt_tables LIMIT 1",
+        ErrorCodes::READONLY);
+    expectError(
+        "SELECT hasColumnInTable('system', 'dt_tables', 'name') FROM system.dt_tables LIMIT 1",
+        ErrorCodes::READONLY);
 }
 
 TEST(TiFlashSystemTableQueryTest, RejectsIntoOutfile)
