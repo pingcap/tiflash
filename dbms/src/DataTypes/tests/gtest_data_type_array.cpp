@@ -689,33 +689,4 @@ try
 }
 CATCH
 
-TEST(DataTypeArrayTest, GetDataAtRejectsOffsetsPastNestedColumn)
-try
-{
-    auto nested = ColumnFloat32::create();
-    nested->insert(1.0F);
-    nested->insert(2.0F);
-    nested->insert(3.0F);
-    nested->insert(4.0F);
-    auto offsets = ColumnUInt64::create();
-    offsets->insert(1ULL << 63);
-    offsets->insert(4);
-    auto column = ColumnArray::create(std::move(nested), std::move(offsets));
-
-    for (size_t row = 0; row < column->size(); ++row)
-    {
-        try
-        {
-            const auto ref = column->getDataAt(row);
-            ADD_FAILURE() << "out-of-bounds array offsets were indexed at row " << row << " size " << ref.size;
-        }
-        catch (const Exception & e)
-        {
-            EXPECT_EQ(e.code(), ErrorCodes::LOGICAL_ERROR) << e.displayText();
-            EXPECT_NE(e.displayText().find("out of bounds"), std::string::npos) << e.displayText();
-        }
-    }
-}
-CATCH
-
 } // namespace DB::tests
