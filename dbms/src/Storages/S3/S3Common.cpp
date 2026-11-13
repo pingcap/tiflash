@@ -58,11 +58,6 @@
 #include <aws/s3/model/Tag.h>
 #include <aws/s3/model/TaggingDirective.h>
 #include <common/logger_useful.h>
-#include <kvproto/disaggregated.pb.h>
-#include <pingcap/kv/Cluster.h>
-#include <pingcap/kv/RegionCache.h>
-#include <pingcap/kv/Rpc.h>
-#include <pingcap/kv/internal/type_traits.h>
 #include <re2/re2.h>
 
 #include <any>
@@ -74,7 +69,6 @@
 #include <memory>
 #include <mutex>
 #include <string_view>
-#include <thread>
 
 
 namespace ProfileEvents
@@ -213,6 +207,7 @@ bool ClientFactory::isEnabled() const
     return config.isS3Enabled();
 }
 
+<<<<<<< HEAD
 disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
     pingcap::kv::Cluster * kv_cluster,
     const LoggerPtr & log)
@@ -288,6 +283,8 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
     }
 }
 
+=======
+>>>>>>> 62f49cf4c0 (fix: stop bootstrapping S3 config from write nodes (#11312))
 // Returns <aws_client_config, use_virtual_addressing>
 std::pair<Aws::Client::ClientConfiguration, CloudVendor> ClientFactory::initAwsClientConfig(
     const StorageS3Config & storage_config,
@@ -342,12 +339,7 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
         shared_s3_read_metrics_recorder = std::make_shared<S3ReadMetricsRecorder>();
     RUNTIME_CHECK(!config.root.starts_with("//"), config.root);
     config.root = normalizedRoot(config.root);
-
-    if (config.bucket.empty())
-    {
-        LOG_INFO(log, "bucket is not specified, S3 client will be inited later");
-        return;
-    }
+    RUNTIME_CHECK_MSG(!config.bucket.empty(), "storage.s3.bucket must be set before initializing the S3 client");
 
     if (!mock_s3_)
     {
@@ -377,43 +369,6 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     client_is_inited = true; // init finish
 }
 
-std::shared_ptr<TiFlashS3Client> ClientFactory::initClientFromWriteNode()
-{
-    std::unique_lock lock_init(mtx_init);
-    if (client_is_inited) // another thread has done init
-        return shared_tiflash_client;
-
-    using namespace std::chrono_literals;
-    while (kv_cluster == nullptr)
-    {
-        lock_init.unlock();
-        LOG_INFO(log, "waiting for kv_cluster init");
-        std::this_thread::sleep_for(1s);
-        lock_init.lock();
-    }
-    assert(kv_cluster != nullptr);
-
-    const auto disagg_config = getDisaggConfigFromDisaggWriteNodes(kv_cluster, log);
-    if (shared_s3_read_metrics_recorder == nullptr)
-        shared_s3_read_metrics_recorder = std::make_shared<S3ReadMetricsRecorder>();
-    // update connection fields and leave other fields unchanged
-    config.endpoint = disagg_config.s3_config().endpoint();
-    config.root = normalizedRoot(disagg_config.s3_config().root());
-    config.bucket = disagg_config.s3_config().bucket();
-    LOG_INFO(log, "S3 config updated, {}", config.toString());
-
-    auto [s3_client, vendor] = create(config, log);
-    cloud_vendor = vendor;
-    shared_tiflash_client = std::make_shared<TiFlashS3Client>(
-        config.bucket,
-        config.root,
-        std::move(s3_client),
-        shared_s3_read_limiter,
-        shared_s3_read_metrics_recorder);
-    client_is_inited = true; // init finish
-    return shared_tiflash_client;
-}
-
 void ClientFactory::shutdown()
 {
     {
@@ -435,10 +390,8 @@ ClientFactory & ClientFactory::instance()
 
 std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
 {
-    if (client_is_inited)
-        return shared_tiflash_client;
-
-    return initClientFromWriteNode();
+    RUNTIME_CHECK_MSG(client_is_inited.load(), "S3 client is not initialized; set storage.s3 in the config file");
+    return shared_tiflash_client;
 }
 
 CloudVendor updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log)
