@@ -388,7 +388,48 @@ try
 }
 CATCH
 
-TEST(DataTypeArrayTest, AllowsEmptyElementsForNestedAlter)
+TEST(DataTypeArrayTest, AllowsEmptyArrays)
+try
+{
+    const DataTypes nested_types{
+        std::make_shared<DataTypeFloat32>(),
+        std::make_shared<DataTypeNullable>(std::make_shared<DataTypeFloat32>()),
+        std::make_shared<DataTypeTuple>(
+            DataTypes{std::make_shared<DataTypeFloat32>(), std::make_shared<DataTypeFloat32>()}),
+        std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat32>())};
+    for (const auto & nested_type : nested_types)
+    {
+        SCOPED_TRACE(nested_type->getName());
+        const DataTypeArray type(nested_type);
+        for (const size_t rows : {0, 2})
+        {
+            const String sizes = podBytes(std::vector<UInt64>(rows, 0));
+            for (const bool position_independent : {true, false})
+            {
+                for (const bool single_stream : {true, false})
+                {
+                    auto column = type.createColumn();
+                    if (single_stream)
+                        deserializeSingleStream(type, *column, sizes, rows, position_independent);
+                    else
+                        deserializeSplit(type, *column, sizes, {}, rows, position_independent);
+
+                    const auto & array = asArray(*column);
+                    ASSERT_EQ(array.size(), rows);
+                    EXPECT_TRUE(array.getData().empty());
+                    for (size_t row = 0; row < rows; ++row)
+                    {
+                        EXPECT_EQ(array.getOffsets()[row], 0);
+                        EXPECT_EQ(array.getDataAt(row).size, 0);
+                    }
+                }
+            }
+        }
+    }
+}
+CATCH
+
+TEST(DataTypeArrayTest, RejectsEmptyElementsForNonZeroOffsets)
 try
 {
     const DataTypeArray type(std::make_shared<DataTypeFloat32>());
@@ -398,20 +439,64 @@ try
         for (const bool single_stream : {true, false})
         {
             auto column = type.createColumn();
-            if (single_stream)
-                deserializeSingleStream(type, *column, sizes, 2, position_independent);
-            else
-                deserializeSplit(type, *column, sizes, {}, 2, position_independent);
+            try
+            {
+                if (single_stream)
+                    deserializeSingleStream(type, *column, sizes, 2, position_independent);
+                else
+                    deserializeSplit(type, *column, sizes, {}, 2, position_independent);
+                ADD_FAILURE() << "non-zero array offsets without elements were accepted";
+            }
+            catch (const Exception & e)
+            {
+                EXPECT_EQ(e.code(), ErrorCodes::LOGICAL_ERROR) << e.displayText();
+                EXPECT_NE(e.displayText().find("last offset is"), std::string::npos) << e.displayText();
+            }
+        }
+    }
+}
+CATCH
 
-            const auto & array = asArray(*column);
-            ASSERT_EQ(array.size(), 2);
-            EXPECT_EQ(array.getOffsets()[0], 1);
-            EXPECT_EQ(array.getOffsets()[1], 3);
-            EXPECT_TRUE(array.getData().empty());
-
-            // Preserve the ALTER representation, but reject row reads past the empty elements.
-            for (size_t row = 0; row < array.size(); ++row)
-                EXPECT_THROW(array.getDataAt(row), Exception);
+TEST(DataTypeArrayTest, RejectsMissingNullableAndTupleComponents)
+try
+{
+    const DataTypes nested_types{
+        std::make_shared<DataTypeNullable>(std::make_shared<DataTypeFloat32>()),
+        std::make_shared<DataTypeTuple>(
+            DataTypes{std::make_shared<DataTypeFloat32>(), std::make_shared<DataTypeFloat32>()})};
+    for (const auto & nested_type : nested_types)
+    {
+        SCOPED_TRACE(nested_type->getName());
+        const DataTypeArray type(nested_type);
+        const String first_value = nested_type->isNullable() ? String(1, '\0') : podBytes<Float32>({7.0F});
+        for (const bool position_independent : {true, false})
+        {
+            for (const bool missing_first_component : {true, false})
+            {
+                auto column = type.createColumn();
+                const String sizes = podBytes<UInt64>({1});
+                const String first = missing_first_component ? String{} : first_value;
+                const String second = missing_first_component ? podBytes<Float32>({11.0F}) : String{};
+                ReadBufferFromString sizes_in(sizes);
+                ReadBufferFromString first_in(first);
+                ReadBufferFromString second_in(second);
+                IDataType::SubstreamPath path;
+                EXPECT_THROW(
+                    type.deserializeBinaryBulkWithMultipleStreams(
+                        *column,
+                        [&](const IDataType::SubstreamPath & stream_path) -> ReadBuffer * {
+                            if (IDataType::isArraySizes(stream_path))
+                                return &sizes_in;
+                            if (IDataType::isNullMap(stream_path) || stream_path.back().tuple_element_name == "1")
+                                return &first_in;
+                            return &second_in;
+                        },
+                        1,
+                        0,
+                        position_independent,
+                        path),
+                    Exception);
+            }
         }
     }
 }

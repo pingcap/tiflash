@@ -322,9 +322,8 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
         path);
 
     /// Check consistency between offsets and elements subcolumns.
-    /// But if elements column is empty - it's ok for columns of Nested types that was added by ALTER.
-    if (!nested_column.empty())
-        checkNestedColumnSize(nested_column, last_offset);
+    /// Empty elements are valid only when the last offset is zero.
+    checkNestedColumnSize(nested_column, last_offset);
 }
 
 
