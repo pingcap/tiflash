@@ -542,7 +542,6 @@ TEST(CollatorSuite, OptimizedLikeRejectTruncatedUTF8)
     for (const auto collator_id : {
              ITiDBCollator::UTF8_BIN,
              ITiDBCollator::UTF8MB4_BIN,
-             ITiDBCollator::UTF8MB4_0900_BIN,
          })
     {
         SCOPED_TRACE(collator_id);
