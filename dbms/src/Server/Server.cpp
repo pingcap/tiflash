@@ -527,11 +527,6 @@ try
     {
         storage_config.s3_config.enable(/*check_requirements*/ true, log);
     }
-    else if (disagg_opt.mode == DisaggregatedMode::Compute && disagg_opt.use_autoscaler)
-    {
-        // compute node with auto scaler, the requirements will be initted later.
-        storage_config.s3_config.enable(/*check_requirements*/ false, log);
-    }
 
     if (storage_config.format_version != 0)
     {
@@ -573,6 +568,14 @@ try
                 ErrorCodes::INVALID_CONFIG_PARAMETER,
                 "'flash.disaggregated_mode' must be set when S3 is enabled!");
         }
+    }
+    // Prevent tiflash-compute from starting without a proper S3 configuration.
+    if (disagg_opt.mode == DisaggregatedMode::Compute && !storage_config.s3_config.isS3Enabled())
+    {
+        const String message = "'storage.s3.bucket', 'storage.s3.endpoint' and 'storage.s3.root' must be set "
+                               "when 'flash.disaggregated_mode' is 'tiflash_compute'!";
+        LOG_ERROR(log, message);
+        throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, message);
     }
 
     LOG_INFO(log, "Using api_version={}", storage_config.api_version);
@@ -1003,12 +1006,6 @@ try
         proxy_machine.initKVStore(global_context->getTMTContext(), store_ident);
 
         global_context->getTMTContext().reloadConfig(config());
-        // setup the kv cluster for disagg compute node fetching config
-        if (S3::ClientFactory::instance().isEnabled())
-        {
-            auto & tmt = global_context->getTMTContext();
-            S3::ClientFactory::instance().setKVCluster(tmt.getKVCluster());
-        }
     }
     LOG_INFO(log, "Init S3 GC Manager");
     global_context->getTMTContext().initS3GCManager(proxy_machine.getProxyHelper());

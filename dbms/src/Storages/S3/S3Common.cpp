@@ -64,11 +64,6 @@
 #include <aws/sts/model/GetCallerIdentityRequest.h>
 #include <aws/sts/model/GetCallerIdentityResult.h>
 #include <common/logger_useful.h>
-#include <kvproto/disaggregated.pb.h>
-#include <pingcap/kv/Cluster.h>
-#include <pingcap/kv/RegionCache.h>
-#include <pingcap/kv/Rpc.h>
-#include <pingcap/kv/internal/type_traits.h>
 #include <re2/re2.h>
 
 #include <any>
@@ -80,7 +75,6 @@
 #include <memory>
 #include <mutex>
 #include <string_view>
-#include <thread>
 
 
 namespace ProfileEvents
@@ -216,81 +210,6 @@ bool ClientFactory::isEnabled() const
     return config.isS3Enabled();
 }
 
-disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
-    pingcap::kv::Cluster * kv_cluster,
-    const LoggerPtr & log)
-{
-    using namespace std::chrono_literals;
-
-    // TODO: Move it into client-c and use Backoff
-    // try until success
-    while (true)
-    {
-        auto stores = kv_cluster->pd_client->getAllStores(/*exclude_tombstone*/ true);
-        for (const auto & store : stores)
-        {
-            std::map<String, String> labels;
-            for (const auto & label : store.labels())
-            {
-                labels[label.key()] = label.value();
-            }
-            const auto & send_address = store.address();
-            if (!pingcap::kv::labelFilterOnlyTiFlashWriteNode(labels))
-            {
-                LOG_INFO(
-                    log,
-                    "get disagg config ignore store by label, store_id={} address={}",
-                    store.id(),
-                    send_address);
-                continue;
-            }
-
-            try
-            {
-                pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(GetDisaggConfig)> rpc(kv_cluster->rpc_client, send_address);
-
-                grpc::ClientContext client_context;
-                rpc.setClientContext(client_context, /*timeout=*/2);
-                disaggregated::GetDisaggConfigRequest req;
-                disaggregated::GetDisaggConfigResponse resp;
-                auto status = rpc.call(&client_context, req, &resp);
-                if (!status.ok())
-                    throw Exception(rpc.errMsg(status));
-
-                RUNTIME_CHECK(resp.has_s3_config(), resp.ShortDebugString());
-
-                if (resp.s3_config().endpoint().empty() || resp.s3_config().bucket().empty()
-                    || resp.s3_config().root().empty())
-                {
-                    LOG_WARNING(
-                        log,
-                        "invalid settings, store_id={} address={} resp={}",
-                        store.id(),
-                        send_address,
-                        resp.ShortDebugString());
-                    continue;
-                }
-
-                LOG_INFO(
-                    log,
-                    "get disagg config from write node, store_id={} address={} resp={}",
-                    store.id(),
-                    send_address,
-                    resp.ShortDebugString());
-                return resp;
-            }
-            catch (...)
-            {
-                tryLogCurrentException(
-                    log,
-                    fmt::format("failed to get disagg config, store_id={} address={}", store.id(), send_address));
-            }
-        }
-        LOG_WARNING(log, "failed to get disagg config from all tiflash stores, retry");
-        std::this_thread::sleep_for(2s);
-    }
-}
-
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     log = Logger::get();
@@ -322,12 +241,7 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     config = config_;
     RUNTIME_CHECK(!config.root.starts_with("//"), config.root);
     config.root = normalizedRoot(config.root);
-
-    if (config.bucket.empty())
-    {
-        LOG_INFO(log, "bucket is not specified, S3 client will be inited later");
-        return;
-    }
+    RUNTIME_CHECK_MSG(!config.bucket.empty(), "storage.s3.bucket must be set before initializing the S3 client");
 
     if (!mock_s3_)
     {
@@ -340,34 +254,6 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
         shared_tiflash_client = std::make_unique<tests::MockS3Client>(config.bucket, config.root);
     }
     client_is_inited = true; // init finish
-}
-
-std::shared_ptr<TiFlashS3Client> ClientFactory::initClientFromWriteNode()
-{
-    std::unique_lock lock_init(mtx_init);
-    if (client_is_inited) // another thread has done init
-        return shared_tiflash_client;
-
-    using namespace std::chrono_literals;
-    while (kv_cluster == nullptr)
-    {
-        lock_init.unlock();
-        LOG_INFO(log, "waiting for kv_cluster init");
-        std::this_thread::sleep_for(1s);
-        lock_init.lock();
-    }
-    assert(kv_cluster != nullptr);
-
-    const auto disagg_config = getDisaggConfigFromDisaggWriteNodes(kv_cluster, log);
-    // update connection fields and leave other fields unchanged
-    config.endpoint = disagg_config.s3_config().endpoint();
-    config.root = normalizedRoot(disagg_config.s3_config().root());
-    config.bucket = disagg_config.s3_config().bucket();
-    LOG_INFO(log, "S3 config updated, {}", config.toString());
-
-    shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
-    client_is_inited = true; // init finish
-    return shared_tiflash_client;
 }
 
 void ClientFactory::shutdown()
@@ -396,10 +282,8 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create() const
 
 std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
 {
-    if (client_is_inited)
-        return shared_tiflash_client;
-
-    return initClientFromWriteNode();
+    RUNTIME_CHECK_MSG(client_is_inited.load(), "S3 client is not initialized; set storage.s3 in the config file");
+    return shared_tiflash_client;
 }
 
 namespace
