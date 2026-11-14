@@ -333,6 +333,7 @@ inline UInt64 readVarUInt(const char *& data, size_t & len)
 
 inline UInt8 readUInt8(const char *& data, size_t & len)
 {
+    RUNTIME_CHECK_MSG(len >= sizeof(UInt8), "cf value truncated, need {}, remain {}", sizeof(UInt8), len);
     auto res = static_cast<UInt8>(*data);
     data += sizeof(UInt8), len -= sizeof(UInt8);
     return res;
@@ -340,6 +341,7 @@ inline UInt8 readUInt8(const char *& data, size_t & len)
 
 inline UInt64 readUInt64(const char *& data, size_t & len)
 {
+    RUNTIME_CHECK_MSG(len >= sizeof(UInt64), "cf value truncated, need {}, remain {}", sizeof(UInt64), len);
     auto res = readBigEndian<UInt64>(data);
     data += sizeof(UInt64), len -= sizeof(UInt64);
     return res;
@@ -348,6 +350,7 @@ inline UInt64 readUInt64(const char *& data, size_t & len)
 template <typename R>
 inline R readRawString(const char *& data, size_t & len, size_t str_len)
 {
+    RUNTIME_CHECK_MSG(len >= str_len, "cf value truncated, need {}, remain {}", str_len, len);
     R res{};
     if constexpr (!std::is_same_v<R, std::nullptr_t>)
     {
