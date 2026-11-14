@@ -14,9 +14,11 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskWaiter.h>
 #include <prometheus/gauge.h>
 
 #include <deque>
@@ -68,57 +70,42 @@ public:
 
     inline void registerTask(TaskPtr && task)
     {
-        assert(task);
-        auto type = task->getNotifyType();
-        assert(task->getStatus() == ExecTaskStatus::WAIT_FOR_NOTIFY);
-        {
-            std::lock_guard lock(mu);
-            tasks.push_back(std::move(task));
-        }
-
-        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
-        metrics.Increment();
-        updateTaskNotifyWaitMetrics(type, 1);
+        assert(task && task->getStatus() == ExecTaskStatus::WAIT_FOR_NOTIFY);
+        auto waiter = task->getWaiter();
+        RUNTIME_CHECK_MSG(waiter, "Task waiter must be initialized by registerTaskToFuture before registration");
+        std::lock_guard lock(mu);
+        tasks.push_back(std::move(waiter));
+        // Account for the task only after enqueueing succeeds, while notification is still excluded.
+        tasks.back()->setTask(std::move(task));
     }
 
     inline void notifyOne()
     {
-        TaskPtr task;
+        while (true)
         {
-            std::lock_guard lock(mu);
-            if (tasks.empty())
+            TaskWaiterPtr waiter;
+            {
+                std::lock_guard lock(mu);
+                if (tasks.empty())
+                    return;
+                waiter = std::move(tasks.front());
+                tasks.pop_front();
+            }
+            // A stopped task may already have left this queue. Keep looking for a live waiter.
+            if (waiter->notify())
                 return;
-            task = std::move(tasks.front());
-            tasks.pop_front();
         }
-        assert(task);
-        auto type = task->getNotifyType();
-        notifyTaskDirectly(std::move(task));
-
-        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
-        metrics.Decrement();
-        updateTaskNotifyWaitMetrics(type, -1);
     }
 
     inline void notifyAll()
     {
-        std::deque<TaskPtr> cur_tasks;
+        std::deque<TaskWaiterPtr> ready_waiters;
         {
             std::lock_guard lock(mu);
-            std::swap(cur_tasks, tasks);
+            ready_waiters.swap(tasks);
         }
-        size_t tasks_cnt = cur_tasks.size();
-        while (!cur_tasks.empty())
-        {
-            auto cur_task = std::move(cur_tasks.front());
-            auto type = cur_task->getNotifyType();
-            notifyTaskDirectly(std::move(cur_task));
-            updateTaskNotifyWaitMetrics(type, -1);
-            cur_tasks.pop_front();
-        }
-
-        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
-        metrics.Decrement(tasks_cnt);
+        for (const auto & waiter : ready_waiters)
+            waiter->notify();
     }
 
     static inline void notifyTaskDirectly(TaskPtr && task)
@@ -131,6 +118,6 @@ public:
 
 private:
     std::mutex mu;
-    std::deque<TaskPtr> tasks;
+    std::deque<TaskWaiterPtr> tasks;
 };
 } // namespace DB

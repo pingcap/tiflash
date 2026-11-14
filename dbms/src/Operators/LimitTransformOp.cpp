@@ -17,20 +17,31 @@
 
 namespace DB
 {
-template <typename LimitActionPtr>
-OperatorStatus LimitTransformOp<LimitActionPtr>::transformImpl(Block & block)
+OperatorStatus LimitTransformOp::tryOutputImpl(Block & block)
+{
+    if (action->isLimitReached())
+    {
+        if (input_stop)
+            input_stop->stop();
+        block = {};
+        return OperatorStatus::HAS_OUTPUT;
+    }
+    return OperatorStatus::NEED_INPUT;
+}
+
+OperatorStatus LimitTransformOp::transformImpl(Block & block)
 {
     if (!action->transform(block))
         block = {};
+    // Keep the block which satisfies LIMIT: downstream operators must still deliver it.
+    if (input_stop && action->isLimitReached())
+        input_stop->stop();
     return OperatorStatus::HAS_OUTPUT;
 }
 
-template <typename LimitActionPtr>
-void LimitTransformOp<LimitActionPtr>::transformHeaderImpl(Block & header_)
+void LimitTransformOp::transformHeaderImpl(Block & header_)
 {
     header_ = action->getHeader();
 }
 
-template class LimitTransformOp<GlobalLimitPtr>;
-template class LimitTransformOp<LocalLimitPtr>;
 } // namespace DB

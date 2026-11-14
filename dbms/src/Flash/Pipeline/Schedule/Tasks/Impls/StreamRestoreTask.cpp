@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/Tasks/Impls/StreamRestoreTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskWaiter.h>
 #include <Operators/SharedQueue.h>
 
 #include <magic_enum.hpp>
@@ -23,14 +24,21 @@ StreamRestoreTask::StreamRestoreTask(
     PipelineExecutorContext & exec_context_,
     const String & req_id,
     const BlockInputStreamPtr & stream_,
-    const SharedQueueSinkHolderPtr & sink_)
+    const SharedQueueSinkHolderPtr & sink_,
+    TaskStopSourcePtr stop_source_)
     : Task(exec_context_, req_id, ExecTaskStatus::IO_IN)
     , stream(stream_)
     , sink(sink_)
+    , stop_source(std::move(stop_source_))
 {
     assert(sink);
     assert(stream);
     stream->readPrefix();
+}
+
+TaskStopSources StreamRestoreTask::getNotifyStopSources() const
+{
+    return stop_source ? TaskStopSources{stop_source} : TaskStopSources{};
 }
 
 ExecTaskStatus StreamRestoreTask::executeImpl()
@@ -60,6 +68,8 @@ ExecTaskStatus StreamRestoreTask::tryFlush()
 
 ExecTaskStatus StreamRestoreTask::executeIOImpl()
 {
+    if (stop_source && stop_source->isStopped())
+        return ExecTaskStatus::FINISHED;
     if unlikely (is_done)
         return ExecTaskStatus::FINISHED;
 

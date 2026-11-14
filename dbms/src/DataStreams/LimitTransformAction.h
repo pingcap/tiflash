@@ -20,26 +20,6 @@
 
 namespace DB
 {
-class LocalLimitTransformAction
-{
-public:
-    LocalLimitTransformAction(const Block & header_, size_t limit_)
-        : header(header_)
-        , limit(limit_)
-    {}
-
-    bool transform(Block & block);
-
-    Block getHeader() const { return header; }
-    size_t getLimit() const { return limit; }
-
-private:
-    const Block header;
-    const size_t limit;
-    size_t pos = 0;
-};
-using LocalLimitPtr = std::shared_ptr<LocalLimitTransformAction>;
-
 class GlobalLimitTransformAction
 {
 public:
@@ -52,6 +32,7 @@ public:
 
     Block getHeader() const { return header; }
     size_t getLimit() const { return limit; }
+    bool isLimitReached() const { return pos.load(std::memory_order_acquire) >= limit; }
 
 private:
     const Block header;

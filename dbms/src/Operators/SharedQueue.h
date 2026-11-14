@@ -122,7 +122,6 @@ public:
         : queue(queue_)
     {}
     MPMCQueueResult tryPop(Block & block) { return queue->tryPop(block); }
-    const SharedQueuePtr & getQueue() const { return queue; }
 
     void registerTask(TaskPtr && task) override
     {

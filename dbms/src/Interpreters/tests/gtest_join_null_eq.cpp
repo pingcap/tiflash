@@ -21,12 +21,12 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Debug/TiFlashTestEnv.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Join.h>
 #include <Operators/HashJoinProbeTransformOp.h>
 #include <Operators/HashProbeTransformExec.h>
-#include <Operators/SharedQueue.h>
 #include <gtest/gtest.h>
 
 #include <mutex>
@@ -82,7 +82,7 @@ Block makeSampleBlock(const DataTypePtr & key_type)
 JoinPtr makeTestJoin(
     const DataTypePtr & key_type,
     const std::vector<UInt8> & is_null_eq,
-    const ProbeStopContextPtr & probe_stop_context = nullptr)
+    const TaskStopSourcePtr & probe_stop_source = nullptr)
 {
     SpillConfig build_spill_config("/tmp", "join_null_eq_build", 0, 0, 0, nullptr);
     SpillConfig probe_spill_config("/tmp", "join_null_eq_probe", 0, 0, 0, nullptr);
@@ -109,42 +109,25 @@ JoinPtr makeTestJoin(
         0,
         true,
         dummy_runtime_filter_list,
-        probe_stop_context);
+        probe_stop_source);
 }
 
-TEST(JoinProbeStopTest, CancelsAllRestoreProbeQueues)
+TEST(JoinProbeStopTest, SharesStopWithExistingAndLateRestoreJoins)
 {
-    auto join = makeTestJoin(std::make_shared<DataTypeInt32>(), {0});
-    auto registered_queue = SharedQueue::buildInternal(1, 1, -1, 1);
-    join->addRestoreProbeQueue(registered_queue);
-
-    join->stopProbePhase();
-
-    Block block;
-    ASSERT_EQ(registered_queue->tryPush(std::move(block)), MPMCQueueResult::CANCELLED);
-
-    // Registration can race with stopProbePhase. A queue registered after the state transition must be cancelled too.
-    auto late_registered_queue = SharedQueue::buildInternal(1, 1, -1, 1);
-    join->addRestoreProbeQueue(late_registered_queue);
-    ASSERT_EQ(late_registered_queue->tryPop(block), MPMCQueueResult::CANCELLED);
-}
-
-TEST(JoinProbeStopTest, PropagatesStopToRestoreJoin)
-{
-    auto probe_stop_context = std::make_shared<ProbeStopContext>();
-    auto parent_join = makeTestJoin(std::make_shared<DataTypeInt32>(), {0}, probe_stop_context);
-    auto restore_join = makeTestJoin(std::make_shared<DataTypeInt32>(), {0}, probe_stop_context);
-    auto restore_probe_queue = SharedQueue::buildInternal(1, 1, -1, 1);
-    restore_join->addRestoreProbeQueue(restore_probe_queue);
+    auto stop = std::make_shared<TaskStopSource>();
+    auto parent_join = makeTestJoin(std::make_shared<DataTypeInt32>(), {0}, stop);
+    auto restore_join = makeTestJoin(std::make_shared<DataTypeInt32>(), {0}, stop);
 
     parent_join->stopProbePhase();
 
     ASSERT_TRUE(parent_join->isProbeStopped());
     ASSERT_TRUE(restore_join->isProbeStopped());
     ASSERT_TRUE(restore_join->isProbeFinishedForPipeline());
-
-    Block block;
-    ASSERT_EQ(restore_probe_queue->tryPop(block), MPMCQueueResult::CANCELLED);
+    auto late_restore_join = makeTestJoin(std::make_shared<DataTypeInt32>(), {0}, stop);
+    ASSERT_TRUE(late_restore_join->isProbeStopped());
+    // Stopping probe does not claim that a restore hash table has finished building.
+    EXPECT_FALSE(late_restore_join->isBuildFinishedForPipeline());
+    clearNotifyFuture();
 }
 
 TEST(JoinProbeStopTest, StopsProbeOperatorBeforeReadingOrStartingRestore)

@@ -23,6 +23,7 @@ struct PipelineExecBuilder
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;
+    PipelineInputStops input_stops;
 
     void setSourceOp(SourceOpPtr && source_op_);
     void appendTransformOp(TransformOpPtr && transform_op);
@@ -84,6 +85,9 @@ public:
     OperatorProfileInfos getCurProfileInfos() const;
 
     IOProfileInfos getCurIOProfileInfos() const;
+
+    // Capture only the input built so far. Later transforms and groups remain outside this stop scope.
+    TaskStopSourcePtr addInputStop(TaskStopSourcePtr source = {});
 
 private:
     BuilderGroup & getCurGroup()
