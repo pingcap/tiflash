@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Decimal.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -39,6 +40,19 @@ extern const int INVALID_TIME;
 
 namespace
 {
+Int32 getValidatedDivPrecisionIncrement(const tipb::DAGRequest & request)
+{
+    const Int32 increment
+        = request.has_div_precision_increment() ? request.div_precision_increment() : DEFAULT_DIV_PRECISION_INCREMENT;
+    if (unlikely(increment < 0 || increment > static_cast<Int32>(decimal_max_scale)))
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "Invalid div_precision_increment {}, expected a value between 0 and {}",
+            increment,
+            decimal_max_scale);
+    return increment;
+}
+
 bool strictSqlMode(UInt64 sql_mode)
 {
     return sql_mode & TiDBSQLMode::STRICT_ALL_TABLES || sql_mode & TiDBSQLMode::STRICT_TRANS_TABLES;
@@ -78,8 +92,7 @@ DAGContext::DAGContext(
     , connection_alias(connection_alias_)
 {
     RUNTIME_ASSERT(kind != DAGRequestKind::MPP, log, "DAGContext non-mpp constructor get a mpp kind");
-    if (dag_request->has_div_precision_increment())
-        div_precision_increment = dag_request->div_precision_increment();
+    div_precision_increment = getValidatedDivPrecisionIncrement(*dag_request);
     initOutputInfo();
 }
 
@@ -105,8 +118,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & me
     , connection_id(meta_.connection_id())
     , connection_alias(meta_.connection_alias())
 {
-    if (dag_request->has_div_precision_increment())
-        div_precision_increment = dag_request->div_precision_increment();
+    div_precision_increment = getValidatedDivPrecisionIncrement(*dag_request);
     // only mpp task has join executor.
     initExecutorIdToJoinIdMap();
     initOutputInfo();
@@ -141,8 +153,7 @@ DAGContext::DAGContext(
     , connection_id(task_meta_.connection_id())
     , connection_alias(task_meta_.connection_alias())
 {
-    if (dag_request->has_div_precision_increment())
-        div_precision_increment = dag_request->div_precision_increment();
+    div_precision_increment = getValidatedDivPrecisionIncrement(*dag_request);
     initOutputInfo();
 }
 
@@ -181,8 +192,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, s
     , warning_count(0)
     , connection_id(0)
 {
-    if (dag_request->has_div_precision_increment())
-        div_precision_increment = dag_request->div_precision_increment();
+    div_precision_increment = getValidatedDivPrecisionIncrement(*dag_request);
     query_operator_spill_contexts
         = std::make_shared<QueryOperatorSpillContexts>(MPPQueryId(0, 0, 0, 0, "", 0, ""), 100);
     initOutputInfo();

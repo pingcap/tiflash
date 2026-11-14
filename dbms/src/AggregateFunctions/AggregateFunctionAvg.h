@@ -17,6 +17,7 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/TiFlashException.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -56,7 +57,14 @@ public:
         , scale(scale_)
         , result_prec(result_prec_)
         , result_scale(result_scale_)
-    {}
+    {
+        if (unlikely(result_scale < scale))
+            throw TiFlashException(
+                Errors::Decimal::Overflow,
+                "Decimal AVG result scale {} is smaller than argument scale {}",
+                result_scale,
+                scale);
+    }
     String getName() const override { return "avg"; }
 
     DataTypePtr getReturnType() const override

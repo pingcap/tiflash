@@ -50,7 +50,7 @@ void ExchangeSenderStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 void ExchangeSenderStatistics::collectExtraRuntimeDetail()
 {
     const auto & mpp_tunnels = dag_context.tunnel_set->getTunnels();
-    for (UInt16 i = 0; i < partition_num; ++i)
+    for (size_t i = 0; i < partition_num; ++i)
     {
         const auto & connection_profile_info = mpp_tunnels[i]->getConnectionProfileInfo();
         mpp_tunnel_details[i].packets = connection_profile_info.packets;

@@ -14,14 +14,21 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/UTF8Helpers.h>
 #include <TiDB/Collation/CollatorUtils.h>
+#include <common/likely.h>
 #include <common/mem_utils_opt.h>
 
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <vector>
+
+namespace DB::ErrorCodes
+{
+extern const int BAD_ARGUMENTS;
+} // namespace DB::ErrorCodes
 
 namespace TiDB
 {
@@ -165,7 +172,16 @@ struct BinStrPattern
         void srcMoveByOffset(size_t size) { src_index_start += size; }
         void srcSkipChar(const char * src_data)
         {
-            auto size = BinCharSizeFromHead<utf8>(src_data[src_index_start]);
+            const auto size = BinCharSizeFromHead<utf8>(src_data[src_index_start]);
+            if constexpr (utf8)
+            {
+                if (unlikely(size > srcSize()))
+                    throw DB::Exception(
+                        DB::ErrorCodes::BAD_ARGUMENTS,
+                        "Truncated UTF-8 character in LIKE input: expected {} bytes, only {} remaining",
+                        size,
+                        srcSize());
+            }
             srcMoveByOffset(size);
         }
         bool patternEmpty() const { return pattern_index_start >= pattern_index_end; }
@@ -220,7 +236,7 @@ struct BinStrPattern
             }
         }
         return true;
-    };
+    }
 
     // match from end exactly
     // - return true if meet %
@@ -265,7 +281,7 @@ struct BinStrPattern
             }
         }
         return true;
-    };
+    }
 
     // search by pattern `...%..%`
     // - return true if meet %
@@ -336,7 +352,7 @@ struct BinStrPattern
                 }
             }
         }
-    };
+    }
 
     ALWAYS_INLINE inline bool match(std::string_view src) const
     {
