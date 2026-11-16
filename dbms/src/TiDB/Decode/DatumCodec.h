@@ -38,6 +38,8 @@ static constexpr UInt64 SIGN_MASK = static_cast<UInt64>(1) << 63;
 template <typename T>
 inline std::enable_if_t<std::is_unsigned_v<T>, T> DecodeUInt(size_t & cursor, const String & raw_value)
 {
+    if (unlikely(cursor > raw_value.size() || raw_value.size() - cursor < sizeof(T)))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong format, cursor over buffer size. (DecodeUInt)");
     T res = readBigEndian<T>(&raw_value[cursor]);
     cursor += sizeof(T);
     return res;
