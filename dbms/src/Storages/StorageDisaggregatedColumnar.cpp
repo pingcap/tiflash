@@ -1463,7 +1463,11 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTask(
     auto region_reader_plans = buildRegionReaderPlansFromPhysicalTableRanges(log, context, physical_table_ranges);
     const auto region_num = static_cast<unsigned>(region_reader_plans.size());
     const auto physical_table_num = static_cast<unsigned>(physical_table_ranges.size());
-    const bool enable_bucket_parallel = !table_scan.keepOrder() && num_streams > region_num;
+    const bool is_fts_query = table_scan.getFTSQueryInfo().query_type() != tipb::FTSQueryType::FTSQueryTypeInvalid;
+    const bool is_ann_query = table_scan.getANNQueryInfo().query_type() != tipb::ANNQueryType::InvalidQueryType;
+    // Bucket readers can repeat FTS or ANN searches over the same index before filtering hits by handle range.
+    const bool enable_bucket_parallel
+        = !is_fts_query && !is_ann_query && !table_scan.keepOrder() && num_streams > region_num;
     size_t total_max_reader_num = region_num;
     for (auto & plan : region_reader_plans)
     {
