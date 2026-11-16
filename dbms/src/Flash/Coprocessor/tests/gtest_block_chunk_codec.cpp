@@ -25,6 +25,7 @@
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Schema/TiDBTypes.h>
 #include <common/logger_useful.h>
 
 #include <initializer_list>
@@ -530,6 +531,40 @@ String encodeRowCountChunk(
     return CHBlockChunkCodecV1::encode(raw, compression);
 }
 
+String encodeTruncatedUInt64Chunk(
+    const Block & block,
+    MPPDataPacketVersion version,
+    CompressionMethod compression,
+    size_t removed_values)
+{
+    String raw;
+    if (version == MPPDataPacketV0)
+    {
+        std::vector<tipb::FieldType> fields(block.columns());
+        for (auto & field : fields)
+        {
+            field.set_tp(TiDB::TypeLongLong);
+            field.set_flag(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned);
+        }
+        auto stream = CHBlockChunkCodec{}.newCodecStream(fields);
+        stream->encode(block, 0, block.rows());
+        raw = stream->getString();
+    }
+    else
+    {
+        raw = CHBlockChunkCodecV1{block, version}.encode(block, CompressionMethod::NONE);
+        raw.erase(0, 1); // Remove the uncompressed packet marker.
+    }
+
+    // Truncate column data before compression so compression framing remains valid.
+    raw.resize(raw.size() - removed_values * sizeof(UInt64));
+    if (version == MPPDataPacketV0)
+        return raw;
+    if (compression == CompressionMethod::NONE)
+        return String(1, static_cast<char>(CompressionMethodByte::NONE)) + raw;
+    return CHBlockChunkCodecV1::encode(raw, compression);
+}
+
 template <typename Decode>
 void expectRowCountError(Decode && decode)
 {
@@ -606,6 +641,60 @@ try
         ASSERT_EQ(decoded.rows(), 2);
         EXPECT_EQ(decoded.getByPosition(0).column->getUInt(0), 42);
         EXPECT_EQ(decoded.getByPosition(0).column->getUInt(1), 42);
+    }
+}
+CATCH
+
+TEST(CHBlockChunkCodecTest, RejectTruncatedColumnData)
+try
+{
+    const Blocks blocks{
+        Block({createColumn<UInt64>({1, 2}, "a")}),
+        Block({createColumn<UInt64>({1, 2}, "a"), createColumn<UInt64>({3, 4}, "b")}),
+    };
+    for (const auto & block : blocks)
+    {
+        const auto header = block.cloneEmpty();
+        for (const auto version : {MPPDataPacketV0, MPPDataPacketV1, MPPDataPacketV2})
+        {
+            for (const auto compression : {CompressionMethod::NONE, CompressionMethod::LZ4, CompressionMethod::ZSTD})
+            {
+                if (version == MPPDataPacketV0 && compression != CompressionMethod::NONE)
+                    continue;
+                SCOPED_TRACE(fmt::format(
+                    "columns={} version={} compression={}",
+                    block.columns(),
+                    static_cast<int>(version),
+                    static_cast<int>(compression)));
+
+                const auto valid_chunk = encodeTruncatedUInt64Chunk(block, version, compression, 0);
+                const auto decoded = version == MPPDataPacketV0 ? CHBlockChunkCodec::decode(valid_chunk, header)
+                                                                : CHBlockChunkCodecV1::decode(header, valid_chunk);
+                ASSERT_BLOCK_EQ(block, decoded);
+
+                for (const size_t removed_values : {1, 2})
+                {
+                    SCOPED_TRACE(removed_values);
+                    const auto chunk = encodeTruncatedUInt64Chunk(block, version, compression, removed_values);
+                    expectRowCountError([&] {
+                        return version == MPPDataPacketV0 ? CHBlockChunkCodec::decode(chunk, header)
+                                                          : CHBlockChunkCodecV1::decode(header, chunk);
+                    });
+                    for (const bool append : {false, true})
+                    {
+                        SCOPED_TRACE(append);
+                        CHBlockChunkDecodeAndSquash decoder(header, 8192);
+                        const auto decode = [&](const String & data) {
+                            return version == MPPDataPacketV0 ? decoder.decodeAndSquash(data)
+                                                              : decoder.decodeAndSquashV1(data);
+                        };
+                        if (append)
+                            ASSERT_FALSE(decode(valid_chunk));
+                        expectRowCountError([&] { return decode(chunk); });
+                    }
+                }
+            }
+        }
     }
 }
 CATCH
