@@ -121,6 +121,48 @@ TEST_F(DAGExpressionAnalyzerTest, FinalProjectionPreservesOutputOffsets)
     }
 }
 
+TEST_F(DAGExpressionAnalyzerTest, RejectsLeftUTF8WithInvalidArgumentCount)
+{
+    for (int child_count : {0, 1, 3})
+    {
+        SCOPED_TRACE(child_count);
+        tipb::Expr expr;
+        expr.set_tp(tipb::ExprType::ScalarFunc);
+        expr.set_sig(tipb::ScalarFuncSig::LeftUTF8);
+        expr.mutable_field_type()->set_tp(TiDB::TypeString);
+        expr.mutable_field_type()->set_flag(TiDB::ColumnFlagNotNull);
+        if (child_count > 0)
+            *expr.add_children() = constructStringLiteralTiExpr("中文abc");
+        for (int i = 1; i < child_count; ++i)
+            *expr.add_children() = constructInt64LiteralTiExpr(2);
+
+        Block block;
+        DAGExpressionAnalyzer analyzer(block, *context);
+        auto actions = std::make_shared<ExpressionActions>(block.getColumnsWithTypeAndName());
+        expectBadRequest([&] { analyzer.getActions(expr, actions); });
+    }
+}
+
+TEST_F(DAGExpressionAnalyzerTest, LeftUTF8WithTwoArguments)
+{
+    tipb::Expr expr;
+    expr.set_tp(tipb::ExprType::ScalarFunc);
+    expr.set_sig(tipb::ScalarFuncSig::LeftUTF8);
+    expr.mutable_field_type()->set_tp(TiDB::TypeString);
+    expr.mutable_field_type()->set_flag(TiDB::ColumnFlagNotNull);
+    *expr.add_children() = constructStringLiteralTiExpr("中文abc");
+    *expr.add_children() = constructInt64LiteralTiExpr(2);
+
+    Block block({createColumn<UInt8>({0}, "dummy")});
+    DAGExpressionAnalyzer analyzer(block, *context);
+    auto actions = std::make_shared<ExpressionActions>(block.getColumnsWithTypeAndName());
+    const auto result_name = analyzer.getActions(expr, actions);
+    actions->execute(block);
+    const auto & result = block.getByName(result_name).column;
+    ASSERT_EQ(result->size(), 1);
+    EXPECT_FIELD_EQ((*result)[0], Field(String("中文")));
+}
+
 TEST_F(DAGExpressionAnalyzerTest, RejectsInWithoutLeftOperand)
 {
     for (auto sig :
