@@ -38,6 +38,7 @@ namespace DB
 Strings MPPTaskManager::dumpTasks()
 {
     std::vector<MPPTaskPtr> tasks;
+    Strings result;
     {
         std::lock_guard lock(mu);
         for (const auto & [query_id, query] : mpp_query_map)
@@ -45,11 +46,12 @@ Strings MPPTaskManager::dumpTasks()
                 gather->forEachMPPTask([&](const auto & entry) {
                     if (entry.second)
                         tasks.push_back(entry.second);
+                    else
+                        result.push_back(fmt::format("mpp_task={} status=NOT_ACTIVE", entry.first.toString()));
                 });
     }
     // Keep tasks alive, but never acquire executor locks under the manager lock.
-    Strings result;
-    result.reserve(tasks.size());
+    result.reserve(result.size() + tasks.size());
     for (const auto & task : tasks)
         result.push_back(task->dumpExecutionState());
     return result;
