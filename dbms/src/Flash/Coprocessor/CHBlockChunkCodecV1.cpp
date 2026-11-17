@@ -24,6 +24,12 @@
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
 #include <IO/WriteHelpers.h>
+#include <common/likely.h>
+
+namespace DB::ErrorCodes
+{
+extern const int CANNOT_READ_ALL_DATA;
+} // namespace DB::ErrorCodes
 
 namespace DB
 {
@@ -97,7 +103,8 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
 
 static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
 {
-    CodecUtils::checkRowCount("CHBlockChunkCodecV1", rows_to_read, res.rows());
+    const size_t existing_rows = res.rows();
+    CodecUtils::checkRowCount("CHBlockChunkCodecV1", rows_to_read, existing_rows);
     if (!rows_to_read)
         return;
 
@@ -128,6 +135,7 @@ static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t r
             sz,
             rows_to_read - decode_rows);
 
+        const size_t expected_rows = existing_rows + decode_rows + sz;
         // Decode columns of one block
         for (size_t i = 0; i < res.columns(); ++i)
         {
@@ -139,6 +147,13 @@ static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t r
                 0,
                 /*position_independent_encoding=*/true,
                 {});
+            if (unlikely(mutable_columns[i]->size() != expected_rows))
+                throw Exception(
+                    ErrorCodes::CANNOT_READ_ALL_DATA,
+                    "CHBlockChunkCodecV1 column {} decoded row count mismatch: expected {}, got {}",
+                    i,
+                    expected_rows,
+                    mutable_columns[i]->size());
         }
     }
 
