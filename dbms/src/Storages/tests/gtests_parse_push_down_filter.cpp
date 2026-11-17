@@ -745,18 +745,13 @@ try
     ReadBufferFromMemory read_buffer(datetime.c_str(), datetime.size());
     UInt64 origin_time_stamp;
     ASSERT_TRUE(tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer));
-    const auto & time_zone_utc = DateLUT::instance("UTC");
-    UInt64 converted_time = origin_time_stamp;
-    std::cout << "origin_time_stamp: " << origin_time_stamp << std::endl;
-    // origin_time_stamp: 1802216106174185472
 
+    // Rough filters keep DATETIME literals in session time and project the pack bounds instead.
     {
         auto ctx = TiFlashTestEnv::getContext();
         // Greater between TimeStamp col and Datetime literal, use Asia/Shanghai timezone
         auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneName("Asia/Shanghai");
-        convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
-        // converted_time: 0
 
         auto filter = generatePushDownExecutor(
             *ctx,
@@ -770,8 +765,9 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
-                + String("\"}"));
+            fmt::format(
+                R"json({{"op":"greater","col":"col_timestamp","value":"{}"}} [session_timezone=Asia/Shanghai])json",
+                origin_time_stamp));
 
         Block before_where_block = Block{
             {toVec<UInt64>(
@@ -805,8 +801,6 @@ try
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneName("America/Chicago");
-        convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
-        // converted_time: 1802216518491045888
 
         auto filter = generatePushDownExecutor(
             *ctx,
@@ -820,8 +814,9 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
-                + String("\"}"));
+            fmt::format(
+                R"json({{"op":"greater","col":"col_timestamp","value":"{}"}} [session_timezone=America/Chicago])json",
+                origin_time_stamp));
 
         Block before_where_block = Block{
             {toVec<UInt64>(
@@ -858,12 +853,10 @@ try
     }
 
     {
-        // Greater between TimeStamp col and Datetime literal, use Chicago timezone
+        // Greater between TimeStamp col and Datetime literal, use a fixed +08:00 offset
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneOffset(28800);
-        convertTimeZoneByOffset(origin_time_stamp, converted_time, false, timezone_info.timezone_offset);
-        // converted_time: 0
 
         auto filter = generatePushDownExecutor(
             *ctx,
@@ -877,8 +870,9 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
-                + String("\"}"));
+            fmt::format(
+                R"json({{"op":"greater","col":"col_timestamp","value":"{}"}} [session_timezone=28800])json",
+                origin_time_stamp));
 
         Block before_where_block = Block{
             {toVec<UInt64>(
