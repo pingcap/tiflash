@@ -337,6 +337,18 @@ MyTimeBase::MyTimeBase(UInt64 packed)
     micro_second = packed % (1 << 24);
 }
 
+bool MyTimeBase::isPackedValueInRange(UInt64 packed)
+{
+    // Layout is defined in `toPackedUInt`. `day` is masked into 5 bits and
+    // `month` is the remainder of `% 13`, so they are always within their
+    // ranges; the other fields need explicit checks.
+    UInt64 ym = packed >> 46; // year * 13 + month
+    UInt64 hms = (packed >> 24) & ((1 << 17) - 1); // hour << 12 | minute << 6 | second
+    UInt64 usec = packed & ((1 << 24) - 1);
+    // year <= 9999, hour <= 23, minute <= 59, second <= 59, micro_second <= 999999
+    return ym <= 9999 * 13 + 12 && (hms >> 12) <= 23 && ((hms >> 6) & 63) <= 59 && (hms & 63) <= 59 && usec <= 999999;
+}
+
 MyTimeBase::MyTimeBase(
     UInt16 year_,
     UInt8 month_,
