@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/config.h> // for ENABLE_NEXT_GEN_COLUMNAR/ENABLE_NEXT_GEN
@@ -28,6 +29,7 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <fiu.h>
+#include <fmt/ranges.h>
 
 #include <boost/noncopyable.hpp>
 #include <chrono>
@@ -42,6 +44,11 @@ namespace FailPoints
 {
 extern const char force_set_proxy_state_machine_cpu_cores[];
 } // namespace FailPoints
+
+namespace ErrorCodes
+{
+extern const int INVALID_CONFIG_PARAMETER;
+} // namespace ErrorCodes
 
 extern "C" {
 void run_raftstore_proxy_ffi(int argc, const char * const * argv, const EngineStoreServerHelper *);
@@ -60,6 +67,11 @@ struct TiFlashProxyConfig
         const Settings & settings,
         const LoggerPtr & log)
     {
+        // Validate `flash.keyspace_name` no matter whether the proxy is going to be
+        // started, so that a typo is rejected at startup even when `raft.pd_addr` is
+        // not configured or the proxy is not needed by this deployment.
+        keyspace_name = getKeyspaceName(config);
+
         is_proxy_runnable = tryParseFromConfig(config, disaggregated_mode, use_autoscaler, use_columnar, log);
         is_columnar = use_columnar;
 
@@ -125,6 +137,57 @@ private:
     // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
     void addExtraArgs(const std::string & k, const std::string & v) { val_map["--" + k] = v; }
 
+    /// Config item holding the keyspace this node is bound to.
+    static constexpr const char * KEYSPACE_CONFIG_KEY = "flash.keyspace_name";
+    /// Name of the store label reported to PD to record the keyspace this node serves.
+    /// Keep it in sync with `KeyspaceLabelKey` in client-go.
+    static constexpr const char * KEYSPACE_LABEL_KEY = "keyspace";
+    /// Same length limit as the keyspace name of PD, see
+    /// https://github.com/tikv/pd/blob/master/pkg/keyspace/util.go
+    static constexpr size_t MAX_KEYSPACE_NAME_LENGTH = 20;
+
+    /// The keyspace this node is bound to, i.e. the value read from `KEYSPACE_CONFIG_KEY`.
+    /// An empty value means the node is not bound to any keyspace and is therefore shared
+    /// by all of them. Clusters that don't configure it keep working as before.
+    ///
+    /// PD does not validate unknown store labels on `PutStore`, so a typo here would be
+    /// registered as a node that matches no keyspace and never receives any MPP task.
+    /// Reject it at startup instead of letting it fail silently.
+    static String getKeyspaceName(const Poco::Util::LayeredConfiguration & config)
+    {
+        if (!config.has(KEYSPACE_CONFIG_KEY))
+            return {};
+
+        const String name = config.getString(KEYSPACE_CONFIG_KEY);
+        // An explicitly empty value is treated as "not set", so that the node is shared
+        // by all the keyspaces.
+        if (name.empty())
+            return {};
+
+        if (!isValidKeyspaceName(name))
+            throw Exception(
+                ErrorCodes::INVALID_CONFIG_PARAMETER,
+                "Invalid `{}`: '{}'. Expect 1 to {} characters out of [A-Za-z0-9_-], same as the keyspace name of PD.",
+                KEYSPACE_CONFIG_KEY,
+                name,
+                MAX_KEYSPACE_NAME_LENGTH);
+        return name;
+    }
+
+    static bool isValidKeyspaceName(const String & name)
+    {
+        if (name.empty() || name.size() > MAX_KEYSPACE_NAME_LENGTH)
+            return false;
+        for (const char c : name)
+        {
+            const bool is_valid_char = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') //
+                || (c >= '0' && c <= '9') || c == '_' || c == '-';
+            if (!is_valid_char)
+                return false;
+        }
+        return true;
+    }
+
     // Try to parse start args from `config`.
     // Return true if proxy need to be started, and `val_map` will be filled with the
     // proxy start params.
@@ -184,12 +247,25 @@ private:
             else
                 args_map["advertise-engine-addr"] = args_map["engine-addr"];
             args_map["engine-label"] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
-            String extra_label;
+
+            // `--labels` is a single comma separated list, but it is assembled from several
+            // sources, collect them first so that no extra comma is left behind.
+            std::vector<String> labels;
+            // Report the keyspace this node belongs to, so that TiDB is able to tell whether a
+            // tiflash_compute node is allowed to serve its keyspace. The label is consumed by
+            // `GetTiFlashComputeStores` in client-go, see `tikvrpc.KeyspaceLabelKey`.
+            // It is placed before the labels from `flash.proxy.labels`: the proxy keeps the
+            // first occurrence of a duplicated label key from `--labels`, so the dedicated
+            // config item wins if the same label key is set in both places.
+            if (!keyspace_name.empty())
+                labels.push_back(fmt::format("{}={}", KEYSPACE_LABEL_KEY, keyspace_name));
+            if (auto it = args_map.find("labels"); it != args_map.end() && !it->second.empty())
+                labels.push_back(it->second);
             if (disaggregated_mode == DisaggregatedMode::Storage)
             {
                 // For tiflash write node, it should report a extra label with "key" == "engine-role-label"
                 // to distinguish with the node under non-disagg mode
-                extra_label = fmt::format("engine_role={}", DISAGGREGATED_MODE_WRITE_ENGINE_ROLE);
+                labels.push_back(fmt::format("engine_role={}", DISAGGREGATED_MODE_WRITE_ENGINE_ROLE));
             }
             else if (disaggregated_mode == DisaggregatedMode::Compute)
             {
@@ -197,15 +273,13 @@ private:
                 // being placed to the compute node.
                 // Related logic in pd-server:
                 // https://github.com/tikv/pd/blob/v8.5.0/pkg/schedule/placement/label_constraint.go#L69-L95
-                extra_label = "exclusive=no-data";
+                labels.push_back("exclusive=no-data");
             }
-            if (args_map.contains("labels"))
-                extra_label = fmt::format("{},{}", args_map["labels"], extra_label);
-            // For non-disagg mode, no extra labels is required
-            if (!extra_label.empty())
-            {
-                args_map["labels"] = extra_label;
-            }
+
+            if (!labels.empty())
+                args_map["labels"] = fmt::format("{}", fmt::join(labels, ","));
+            else
+                args_map.erase("labels");
 
 #if ENABLE_NEXT_GEN == 1
             if (config.has("blacklist_file"))
@@ -226,6 +300,9 @@ private:
     bool is_proxy_runnable = false;
     bool is_columnar = false;
     size_t read_index_runner_count;
+    /// The validated value of `flash.keyspace_name`, empty when the node is not bound
+    /// to any keyspace.
+    String keyspace_name;
 };
 
 struct RaftStoreProxyRunner : boost::noncopyable
