@@ -217,6 +217,12 @@ String DAGExpressionAnalyzerHelper::buildLeftUTF8Function(
     const tipb::Expr & expr,
     const ExpressionActionsPtr & actions)
 {
+    if (unlikely(expr.children_size() != 2))
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "LEFT function requires exactly two arguments, got {}",
+            expr.children_size());
+
     const String & func_name = "substringUTF8";
     Names argument_names;
 
