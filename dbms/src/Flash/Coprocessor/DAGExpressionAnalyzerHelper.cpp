@@ -328,7 +328,7 @@ String DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions(
                  function_json_unquote)
         {
             bool valid_check
-                = !(isScalarFunctionExpr(input_expr) && input_expr.sig() == tipb::ScalarFuncSig::CastJsonAsString);
+                = !isScalarFunctionExpr(input_expr) || input_expr.sig() != tipb::ScalarFuncSig::CastJsonAsString;
             function_json_unquote->setNeedValidCheck(valid_check);
         }
         else if (auto * function_cast_json_as_string = dynamic_cast<FunctionCastJsonAsString *>(function_impl);
@@ -508,6 +508,26 @@ String DAGExpressionAnalyzerHelper::buildGroupingFunction(
     return result_name;
 }
 
+String DAGExpressionAnalyzerHelper::buildLocalMatchAgainstBoolean(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    const ExpressionActionsPtr & actions)
+{
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    for (const auto & child : expr.children())
+    {
+        String name = analyzer->getActions(child, actions);
+        argument_names.push_back(name);
+    }
+    // Expr.val carries Local MATCH metadata, not an SQL argument. Adapt it
+    // to the runtime function's required final constant argument. Keeping it
+    // in argument_names also distinguishes actions with different metadata.
+    const auto metadata_expr = constructStringLiteralTiExpr(expr.val());
+    argument_names.push_back(analyzer->getActions(metadata_expr, actions));
+    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
+}
+
 String DAGExpressionAnalyzerHelper::buildDefaultFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
@@ -570,6 +590,7 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"regexp", DAGExpressionAnalyzerHelper::buildRegexpFunction},
      {"replaceRegexpAll", DAGExpressionAnalyzerHelper::buildRegexpFunction},
      {"tidbRound", DAGExpressionAnalyzerHelper::buildRoundFunction},
-     {"grouping", DAGExpressionAnalyzerHelper::buildGroupingFunction}});
+     {"grouping", DAGExpressionAnalyzerHelper::buildGroupingFunction},
+     {"local_match_against_boolean", DAGExpressionAnalyzerHelper::buildLocalMatchAgainstBoolean}});
 
 } // namespace DB
