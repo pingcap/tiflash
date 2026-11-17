@@ -1467,8 +1467,9 @@ try
     for (const auto word : stopwords)
         candidates.emplace_back(word);
     for (const String & word :
-         {"ABOUT", "The", "THE", "WWW", "WITH", "ábout", "thé", "tĥe", "ｗｉｔｈ", "ｗｗｗ", "aß",    "ß",
-          "xá",    "áx",  "xＡ", "Ａx", "xáy",  "aaa",   "AAA", "xy",  "xyz",      "foo",    "数据库"})
+         {"ABOUT",  "The", "THE", "WWW", "WITH",   "ábout",  "thé",        "tĥe",         "ｗｉｔｈ",
+          "ｗｗｗ", "aß",  "ß",   "xá",  "áx",     "xＡ",    "Ａx",        "xáy",         "aaa",
+          "AAA",    "xy",  "xyz", "foo", "数据库", "aboutx", "ａｂｏｕｔ", "ab\u0640out", "ab\uFC5Eout"})
         candidates.push_back(word);
     for (const auto collation :
          {"binary",
@@ -1976,6 +1977,40 @@ tipb::LocalMatchAgainstBooleanQuery exactQuery(size_t terms, bool duplicate = fa
 }
 } // namespace
 
+TEST_F(TestLocalMatchAgainst, FilteredPhraseAnalyzesRawColumnOnDemand)
+try
+{
+    const auto * collator = TiDB::ITiDBCollator::getCollator("utf8mb4_bin");
+    for (const auto parser : {tipb::LocalMatchAgainstParserStandard, tipb::LocalMatchAgainstParserNgram})
+    {
+        SCOPED_TRACE(parser);
+        tipb::LocalMatchAgainstBooleanQuery query;
+        query.set_parser(parser);
+        query.set_ngram_token_size(3);
+        for (const auto * text : {"foo the zoo", "red the qux"})
+        {
+            auto * phrase = query.add_nodes();
+            phrase->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+            phrase->set_term_type(tipb::LocalMatchAgainstBooleanTermPhrase);
+            phrase->set_text(text);
+        }
+        const ColumnsWithTypeAndName columns{
+            createConstColumn<String>(6, "+\"foo the zoo\" +\"red the qux\""),
+            createColumn<Nullable<String>>(
+                {"unrelated", "foo the zoo red the qux", "foo xyz zoo red the qux", "foo xyz zoo", "foo the zoo", {}}),
+            createColumn<Nullable<String>>(
+                {"filler", "filler", "foo the zoo", "filler", "red the qux", "foo the zoo red the qux"}),
+            createConstColumn<String>(6, serializeLocalMatchAgainstBooleanQuery(query))};
+        LocalMatchAgainstTest::Work work;
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Float64>>({0, 1, 1, 0, 1, 1}),
+            runMatcher(columns, collator, LocalMatchAgainstTest::Matcher::Automatic, work));
+        // Raw scans by row: 0, 1 (two clauses share a scan), 2, 1, 2, 1.
+        EXPECT_EQ(work.unfiltered_column_analyses, 7);
+    }
+}
+CATCH
+
 TEST_F(TestLocalMatchAgainst, ExactRouteWorkAndBucketDeduplication)
 {
     using namespace LocalMatchAgainstTest;
@@ -2148,6 +2183,40 @@ TEST_F(TestLocalMatchAgainst, ExactRouteEquivalentProhibitedAndColumnFallback)
     ASSERT_COLUMN_EQ(createColumn<Float64>({1, 0}), result);
     EXPECT_EQ(2, fallback.indexed_columns);
     EXPECT_EQ(2, fallback.linear_columns);
+}
+
+TEST_F(TestLocalMatchAgainst, ExactRouteTokenThresholdForLargeBlocks)
+{
+    using namespace LocalMatchAgainstTest;
+    const auto * const collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
+    for (size_t rows : {127, 128})
+    {
+        for (size_t tokens : {15, 16, 31, 32})
+        {
+            String document = "a";
+            for (size_t i = 1; i < tokens; ++i)
+                document += " a";
+            for (size_t terms : {63, 64, 99, 100})
+            {
+                SCOPED_TRACE(::testing::Message() << "rows=" << rows << " tokens=" << tokens << " terms=" << terms);
+                auto query = exactQuery(terms, true);
+                query.set_innodb_ft_min_token_size(1);
+                query.set_innodb_ft_max_token_size(84);
+                const ColumnsWithTypeAndName columns{
+                    createConstColumn<String>(rows, "query"),
+                    createColumn<String>(std::vector<String>(rows, document)),
+                    createConstColumn<String>(rows, serializeLocalMatchAgainstBooleanQuery(query))};
+                Work linear, automatic;
+                ASSERT_COLUMN_EQ(
+                    runMatcher(columns, collator, Matcher::Linear, linear),
+                    runMatcher(columns, collator, Matcher::Automatic, automatic));
+                const bool indexed = rows == 128 ? terms >= 64 && tokens >= 16 : terms >= 100 && tokens >= 32;
+                EXPECT_EQ(indexed ? 1 : 0, automatic.route_builds);
+                EXPECT_EQ(indexed ? rows : 0, automatic.indexed_columns);
+                EXPECT_EQ(indexed ? 0 : rows, automatic.linear_columns);
+            }
+        }
+    }
 }
 
 TEST_F(TestLocalMatchAgainst, ExactRouteThresholdNullableAndReusedBlocks)

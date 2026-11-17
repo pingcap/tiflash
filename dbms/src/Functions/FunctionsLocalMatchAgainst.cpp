@@ -35,12 +35,12 @@
 #include <tipb/executor.pb.h>
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -168,7 +168,10 @@ struct AnalyzerScratch
 // costlier than a small linear scan, even above the document token threshold.
 // Reserve automatic routing for large queries; forced routing stays test-only.
 constexpr size_t exact_route_min_terms = 100;
+constexpr size_t exact_route_min_terms_large_block = 64;
 constexpr size_t exact_route_min_tokens = 32;
+constexpr size_t exact_route_min_tokens_large_block = 16;
+constexpr size_t exact_route_large_block_min_rows = 128;
 constexpr size_t exact_route_budget = 4 * 1024 * 1024;
 constexpr size_t exact_route_max_token_bytes = 4096;
 
@@ -246,7 +249,6 @@ struct CompiledBooleanQuery
     size_t must_clause_count = 0;
     bool has_must_not = false;
     bool matches_nothing = false;
-    bool needs_verification = false;
     std::unique_ptr<ExactTermRoute> exact_route;
 };
 
@@ -369,83 +371,169 @@ FullTextColumn tokenizeText(std::string_view text, const TiDB::TiDBCollatorPtr &
     return result;
 }
 
+constexpr auto builtin_stopwords = std::to_array<std::string_view>(
+    {"a",    "about", "an",  "are",  "as",   "at",    "be",  "by",   "com",  "de",  "en",   "for",
+     "from", "how",   "i",   "in",   "is",   "it",    "la",  "of",   "on",   "or",  "that", "the",
+     "this", "to",    "was", "what", "when", "where", "who", "will", "with", "und", "www"});
+
+// The built-in list is ASCII, so byte and code-point lengths agree.
+constexpr size_t max_builtin_stopword_length = [] {
+    size_t result = 0;
+    for (const auto word : builtin_stopwords)
+        result = std::max(result, word.size());
+    return result;
+}();
+static_assert(max_builtin_stopword_length < std::numeric_limits<UInt8>::digits);
+
 const std::unordered_set<String> & defaultStopwords()
 {
-    static const std::unordered_set<String> stopwords{
-        "a",    "about", "an",  "are",  "as",   "at",    "be",  "by",   "com",  "de",  "en",   "for",
-        "from", "how",   "i",   "in",   "is",   "it",    "la",  "of",   "on",   "or",  "that", "the",
-        "this", "to",    "was", "what", "when", "where", "who", "will", "with", "und", "www"};
+    static const auto stopwords = [] {
+        std::unordered_set<String> result;
+        result.reserve(builtin_stopwords.size());
+        for (const auto word : builtin_stopwords)
+            result.emplace(word);
+        return result;
+    }();
     return stopwords;
 }
 
-// Owned collation keys are compiled once per executeImpl, then reused by
-// query analysis and every document in the block. The scratch key is local
-// to that execution, never shared across concurrent calls. Use the stopword
-// (server) collation, not the MATCH column collation.
+// Collation keys own their bytes and are reused across the block. Use the
+// stopword (server) collation independently of the MATCH column collation.
 class BuiltinStopwordLookup
 {
 public:
     explicit BuiltinStopwordLookup(TiDB::TiDBCollatorPtr collator_)
         : collator(collator_)
+        , standard_length_limit(standardLengthLimit(collator_->getCollatorType()))
     {
-        for (const auto & stopword : defaultStopwords())
+        for (const auto stopword : builtin_stopwords)
         {
             const auto key = collator->sortKeyFastPath(stopword.data(), stopword.size(), key_buffer);
-            // sortKeyFastPath may reference its input or key_buffer; copy it.
-            String owned_key(key.data, key.size);
-            keys.insert(owned_key);
-            // The built-in list is ASCII. Preserve NGRAM's code-point length
-            // buckets even for collations with expansions/ignorable weights.
-            keys_by_length[stopword.size()].insert(std::move(owned_key));
+            max_key_size = std::max(max_key_size, key.size);
+            auto * entry = keys.find(key);
+            if (!entry)
+            {
+                // The sort key may reference the reusable buffer.
+                const StringRef owned(key_storage.insert(key.data, key.size), key.size);
+                bool inserted;
+                keys.emplace(owned, entry, inserted);
+                entry->getMapped() = 0;
+            }
+            entry->getMapped() |= lengthBit(stopword.size());
         }
     }
 
-    bool contains(std::string_view token) const { return contains(token, keys); }
-
-    bool contains(std::string_view token, size_t code_points) const
+    bool containsStandard(std::string_view token, size_t code_points) const
     {
-        const auto bucket = keys_by_length.find(code_points);
-        return bucket != keys_by_length.end() && contains(token, bucket->second);
+        const size_t length = standard_length_limit.count_code_points ? code_points : token.size();
+        return length <= standard_length_limit.maximum && matchingLengths(token) != 0;
+    }
+
+    bool containsNgram(std::string_view token, size_t code_points) const
+    {
+        // NGRAM also requires the original code-point count, even when a
+        // collation makes words of different lengths share a key.
+        return code_points <= max_builtin_stopword_length && (matchingLengths(token) & lengthBit(code_points)) != 0;
     }
 
 private:
-    struct KeyHash
+    struct StandardLengthLimit
     {
-        using is_transparent = void;
-        size_t operator()(std::string_view key) const { return std::hash<std::string_view>{}(key); }
+        size_t maximum;
+        bool count_code_points;
     };
-    using Keys = std::unordered_set<String, KeyHash, std::equal_to<>>;
 
-    bool contains(std::string_view token, const Keys & lookup) const
+    static StandardLengthLimit standardLengthLimit(TiDB::ITiDBCollator::CollatorType type)
     {
-        // sortKey (rather than sortKeyNoTrim) preserves PAD SPACE/NO PAD
-        // equality, as well as the collator's case/accent semantics.
+        using Type = TiDB::ITiDBCollator::CollatorType;
+        switch (type)
+        {
+        case Type::UTF8MB4_BIN:
+        case Type::UTF8_BIN:
+        case Type::LATIN1_BIN:
+        case Type::ASCII_BIN:
+        case Type::BINARY:
+        case Type::UTF8MB4_0900_BIN:
+            // STANDARD tokens have no trailing spaces, so PAD SPACE cannot shorten them.
+            return {max_builtin_stopword_length, false};
+        case Type::UTF8_GENERAL_CI:
+        case Type::UTF8MB4_GENERAL_CI:
+            // General CI emits exactly one weight per code point.
+            return {max_builtin_stopword_length, true};
+        default:
+            // Collations with ignorable weights can match longer source tokens.
+            return {std::numeric_limits<size_t>::max(), false};
+        }
+    }
+
+    static UInt8 lengthBit(size_t length) { return static_cast<UInt8>(1U << length); }
+
+    struct CacheEntry
+    {
+        UInt64 bytes = 0;
+        UInt8 size = 0;
+        UInt8 lengths = 0;
+    };
+
+    UInt8 matchingLengths(std::string_view token) const
+    {
+        const size_t size = token.size();
+        if (size == 0 || size > cache_token_bytes)
+            return lookupMatchingLengths(token);
+
+        // The first and last loads cover the complete token. The size
+        // disambiguates equal packed values from tokens of different lengths.
+        const char * data = token.data();
+        UInt64 bytes;
+        if (size >= 4)
+            bytes = (static_cast<UInt64>(unalignedLoad<UInt32>(data)) << 32) | unalignedLoad<UInt32>(data + size - 4);
+        else if (size >= 2)
+            bytes = (static_cast<UInt64>(unalignedLoad<UInt16>(data)) << 16) | unalignedLoad<UInt16>(data + size - 2);
+        else
+            bytes = static_cast<UInt8>(*data);
+
+        auto & entry = cache[intHashCRC32(bytes) & (cache.size() - 1)];
+        const bool hit = entry.size == size && entry.bytes == bytes;
+        if (unlikely(cache_samples_remaining != 0))
+        {
+            cache_sample_hits += hit;
+            if (--cache_samples_remaining == 0 && cache_sample_hits < cache.size() / 4)
+                cache_token_bytes = 0;
+        }
+        if (!hit)
+            entry = {bytes, static_cast<UInt8>(size), lookupMatchingLengths(token)};
+        return entry.lengths;
+    }
+
+    UInt8 lookupMatchingLengths(std::string_view token) const
+    {
         const auto key = collator->sortKeyFastPath(token.data(), token.size(), key_buffer);
-        return lookup.contains(std::string_view(key.data, key.size));
+        if (key.size > max_key_size)
+            return 0;
+        const auto * entry = keys.find(key);
+        return entry ? entry->getMapped() : 0;
     }
 
     TiDB::TiDBCollatorPtr collator;
-    Keys keys;
-    std::unordered_map<size_t, Keys> keys_by_length;
+    const StandardLengthLimit standard_length_limit;
+    Arena key_storage;
+    HashMap<StringRef, UInt8, StringRefHash, HashTableGrower<7>> keys;
+    size_t max_key_size = 0;
     mutable String key_buffer;
+    // A lookup and its collation are local to one block. Cache exact source
+    // bytes, including misses, without keeping references to document data.
+    mutable std::array<CacheEntry, 256> cache;
+    // Sample the first cache-sized batch of short tokens. Avoid the cost of
+    // probing the cache for the rest of the block when most probes miss.
+    mutable size_t cache_samples_remaining = cache.size();
+    mutable size_t cache_sample_hits = 0;
+    mutable size_t cache_token_bytes = sizeof(UInt64);
 };
 
-bool isDefaultStopword(std::string_view token, const BuiltinStopwordLookup * stopwords)
+bool isDefaultStopword(std::string_view token, size_t code_points, const BuiltinStopwordLookup * stopwords)
 {
-    return stopwords ? stopwords->contains(token) : defaultStopwords().contains(Poco::UTF8::toLower(String(token)));
-}
-
-size_t maxBuiltinStopwordLength()
-{
-    // The supported built-in list is ASCII: byte and code-point lengths are
-    // identical. Do not examine lengths which cannot match any stopword.
-    static const size_t max_length = [] {
-        size_t result = 0;
-        for (const auto & word : defaultStopwords())
-            result = std::max(result, word.size());
-        return result;
-    }();
-    return max_length;
+    return stopwords ? stopwords->containsStandard(token, code_points)
+                     : defaultStopwords().contains(Poco::UTF8::toLower(String(token)));
 }
 
 bool containsNgramStopword(
@@ -463,7 +551,7 @@ bool containsNgramStopword(
             const auto candidate = token.substr(char_boundaries[start], char_boundaries[end] - char_boundaries[start]);
             if (!stopwords && defaultStopwords().contains(Poco::UTF8::toLower(String(candidate))))
                 return true;
-            if (stopwords && stopwords->contains(candidate, end - start))
+            if (stopwords && stopwords->containsNgram(candidate, end - start))
                 return true;
         }
     }
@@ -485,7 +573,7 @@ void analyzeTextInto(
         // Filter before materializing. Stopwords use the source spelling and
         // server collation, independently of the MATCH column collation.
         if (code_points < min_token_size || code_points > max_token_size
-            || (enable_stopword && isDefaultStopword(token, stopwords)))
+            || (enable_stopword && isDefaultStopword(token, code_points, stopwords)))
             return;
         result.append(token, position, code_points, borrow_document && collator);
         if (!collator)
@@ -521,7 +609,7 @@ void analyzeNgramTextInto(
         return;
 
     const bool preserve_case = enable_stopword && stopwords;
-    const size_t max_stopword_length = enable_stopword ? std::min(ngram_token_size, maxBuiltinStopwordLength()) : 0;
+    const size_t max_stopword_length = enable_stopword ? std::min(ngram_token_size, max_builtin_stopword_length) : 0;
     size_t next_position_base = 0;
     auto & char_boundaries = scratch.char_boundaries;
     for (size_t offset = 0; offset < text.size();)
@@ -623,7 +711,7 @@ void analyzeNgramTextInto(
                         char_boundaries[candidate_start],
                         char_boundaries[stopword_end] - char_boundaries[candidate_start]);
                     const bool matched = stopwords
-                        ? stopwords->contains(candidate, length)
+                        ? stopwords->containsNgram(candidate, length)
                         : defaultStopwords().contains(Poco::UTF8::toLower(String(candidate)));
                     if (matched)
                     {
@@ -842,10 +930,11 @@ ALWAYS_INLINE ColumnMatchResult markTermMatched(
     return ColumnMatchResult::Continue;
 }
 
+template <typename GetUnfilteredColumn>
 ALWAYS_INLINE ColumnMatchResult updateBooleanMatchStatesForColumn(
     const CompiledBooleanQuery & query,
     const FullTextColumn & column,
-    const FullTextColumn & unfiltered_column,
+    GetUnfilteredColumn && get_unfiltered_column,
     const TiDB::TiDBCollatorPtr & collator,
     std::vector<ClauseMatchState> & states,
     BooleanMatchProgress & progress)
@@ -877,13 +966,16 @@ ALWAYS_INLINE ColumnMatchResult updateBooleanMatchStatesForColumn(
             {
                 if (matchesPhraseEndingAt(clause, column, token, collator))
                 {
-                    if (clause.verification
-                        && !std::any_of(unfiltered_column.begin(), unfiltered_column.end(), [&](const auto & end) {
-                               return matchesPhraseEndingAt(*clause.verification, unfiltered_column, end, collator);
-                           }))
+                    if (clause.verification)
                     {
-                        state.phrase_verification_failed = true;
-                        continue;
+                        const auto & unfiltered_column = get_unfiltered_column();
+                        if (!std::any_of(unfiltered_column.begin(), unfiltered_column.end(), [&](const auto & end) {
+                                return matchesPhraseEndingAt(*clause.verification, unfiltered_column, end, collator);
+                            }))
+                        {
+                            state.phrase_verification_failed = true;
+                            continue;
+                        }
                     }
                     const auto result = markClauseMatched(query, clause_index, states, progress);
                     if (result != ColumnMatchResult::Continue)
@@ -1142,7 +1234,6 @@ CompiledBooleanQuery compileBooleanQuery(
                 clause.verification = std::make_unique<BooleanClause>();
                 clause.verification->phrase = true;
                 collectClauseTerms(*clause.verification, raw_terms);
-                compiled.needs_verification = true;
             }
         }
 
@@ -1191,6 +1282,7 @@ size_t eligibleExactRouteTermCount(
     const LocalMatchAnalyzerConfig & config,
     const TiDB::TiDBCollatorPtr & collator,
     LocalMatchAgainstTest::Matcher matcher,
+    size_t min_terms,
     size_t budget)
 {
     if (matcher == LocalMatchAgainstTest::Matcher::Linear || config.use_ngram || !collator)
@@ -1242,7 +1334,7 @@ size_t eligibleExactRouteTermCount(
             ++terms;
         }
     }
-    if (terms == 0 || (matcher == LocalMatchAgainstTest::Matcher::Automatic && terms < exact_route_min_terms))
+    if (terms == 0 || (matcher == LocalMatchAgainstTest::Matcher::Automatic && terms < min_terms))
         return {};
 
     return terms;
@@ -1497,7 +1589,11 @@ public:
         document_columns.reserve(document_argument_end - 1);
         for (size_t arg = 1; arg < document_argument_end; ++arg)
             document_columns.emplace_back(*block.getByPosition(arguments[arg]).column);
-        const size_t route_terms = eligibleExactRouteTermCount(compiled_query, config, collator, matcher, budget);
+        const bool large_block = rows >= exact_route_large_block_min_rows;
+        const size_t min_route_terms = large_block ? exact_route_min_terms_large_block : exact_route_min_terms;
+        const size_t route_terms
+            = eligibleExactRouteTermCount(compiled_query, config, collator, matcher, min_route_terms, budget);
+        const size_t min_route_tokens = large_block ? exact_route_min_tokens_large_block : exact_route_min_tokens;
         bool may_use_index = matcher == LocalMatchAgainstTest::Matcher::Indexed;
         if (route_terms && !may_use_index)
         {
@@ -1505,7 +1601,7 @@ public:
             // tokens need a separator. This cheap lower bound bypasses the
             // routing row loop for wholly short blocks without tokenizing twice.
             // Use one byte even for unusual analyzer bounds to avoid overflow.
-            constexpr size_t min_document_bytes = exact_route_min_tokens * 2 - 1;
+            const size_t min_document_bytes = min_route_tokens * 2 - 1;
             for (const auto & column : document_columns)
             {
                 for (size_t row = 0; row < rows; ++row)
@@ -1553,8 +1649,9 @@ public:
                         analyzed_column.clear();
                         continue;
                     }
+                    const auto document = document_column.getString(row);
                     analyzeColumnInto(
-                        document_column.getString(row),
+                        document,
                         analyzed_column,
                         analyzer_scratch,
                         use_ngram,
@@ -1572,7 +1669,7 @@ public:
                         // columns may already have contributed to this row's state.
                         if (!route_attempted
                             && (matcher == LocalMatchAgainstTest::Matcher::Indexed
-                                || analyzed_column.size() >= exact_route_min_tokens))
+                                || analyzed_column.size() >= min_route_tokens))
                         {
                             route_attempted = true;
                             compiled_query.exact_route = buildExactTermRoute(compiled_query, collator, route_terms);
@@ -1585,18 +1682,29 @@ public:
                             }
                         }
                     }
-                    if (compiled_query.needs_verification)
-                        analyzeColumnInto(
-                            document_column.getString(row),
-                            unfiltered_column,
-                            analyzer_scratch,
-                            use_ngram,
-                            ngram_token_size,
-                            collator,
-                            nullptr,
-                            0,
-                            std::numeric_limits<size_t>::max(),
-                            false);
+                    // A filtered phrase hit is the first point that needs the
+                    // raw tokens. Share the stream across clauses in this column.
+                    bool unfiltered_ready = false;
+                    const auto get_unfiltered_column = [&]() -> const FullTextColumn & {
+                        if (!unfiltered_ready)
+                        {
+                            analyzeColumnInto(
+                                document,
+                                unfiltered_column,
+                                analyzer_scratch,
+                                use_ngram,
+                                ngram_token_size,
+                                collator,
+                                nullptr,
+                                0,
+                                std::numeric_limits<size_t>::max(),
+                                false);
+                            unfiltered_ready = true;
+                            if constexpr (count_work)
+                                ++work->unfiltered_column_analyses;
+                        }
+                        return unfiltered_column;
+                    };
                     ColumnMatchResult match_result;
                     if constexpr (enable_index)
                     {
@@ -1606,7 +1714,7 @@ public:
                         // this whole column before any state is modified.
                         const bool indexed = exact_scratch
                             && (matcher == LocalMatchAgainstTest::Matcher::Indexed
-                                || analyzed_column.size() >= exact_route_min_tokens)
+                                || analyzed_column.size() >= min_route_tokens)
                             // Valid BMP tokens use at most three bytes per code
                             // point. The usual analyzer bound proves this without
                             // another column pass, including early-hit OR queries.
@@ -1632,7 +1740,7 @@ public:
                                                : updateBooleanMatchStatesForColumn(
                                                    compiled_query,
                                                    analyzed_column,
-                                                   unfiltered_column,
+                                                   get_unfiltered_column,
                                                    collator,
                                                    clause_states,
                                                    match_progress);
@@ -1644,7 +1752,7 @@ public:
                         match_result = updateBooleanMatchStatesForColumn(
                             compiled_query,
                             analyzed_column,
-                            unfiltered_column,
+                            get_unfiltered_column,
                             collator,
                             clause_states,
                             match_progress);
