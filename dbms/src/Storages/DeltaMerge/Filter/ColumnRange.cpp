@@ -68,7 +68,8 @@ ColumnRangePtr AndColumnRange::tryOptimize()
     new_children.clear();
 
     // Merge single sets on the same index by intersecting their integer sets
-    // Remove UnsupportedColumnRange
+    // Keep unsupported predicates for subsequent inversion.
+    bool has_unsupported = false;
     std::unordered_map<IndexID, std::pair<ColumnID, IntegerSetPtr>> merged_sets;
     for (auto & child : children)
     {
@@ -84,7 +85,7 @@ ColumnRangePtr AndColumnRange::tryOptimize()
         }
         else if (child->type == ColumnRangeType::Unsupported)
         {
-            // Skip
+            has_unsupported = true;
         }
         else
         {
@@ -104,6 +105,10 @@ ColumnRangePtr AndColumnRange::tryOptimize()
     // If there is only one child, return that child
     if (children.empty())
         return UnsupportedColumnRange::Instance;
+    // Dropping this marker would turn NOT(unsupported AND B) into NOT B,
+    // which can exclude matching rows. Keep it even when only one supported child remains.
+    if (has_unsupported)
+        children.push_back(UnsupportedColumnRange::create());
     if (children.size() == 1)
         return children.front();
     return this->shared_from_this();
@@ -114,6 +119,9 @@ BitmapFilterPtr AndColumnRange::check(std::function<BitmapFilterPtr(const Single
     BitmapFilterPtr result = nullptr;
     for (const auto & child : children)
     {
+        // Unsupported is needed by invert(), but cannot narrow this intersection.
+        if (child->type == ColumnRangeType::Unsupported)
+            continue;
         auto child_result = child->check(search, size);
         if (!result || !child_result)
             result = child_result;

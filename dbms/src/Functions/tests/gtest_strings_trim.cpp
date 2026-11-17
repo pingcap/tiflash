@@ -13,11 +13,13 @@
 // limitations under the License.
 
 #include <Columns/ColumnString.h>
+#include <Common/Exception.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsString.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -29,6 +31,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
+
 namespace tests
 {
 class StringTrim : public DB::tests::FunctionTest
@@ -592,6 +599,34 @@ TEST_F(StringTrim, stringTrimConstUtf8UnitTest)
         c0_string->get(t, res_field);
         String s = res_field.get<String>();
         EXPECT_EQ(results[t], s);
+    }
+}
+
+TEST_F(StringTrim, RejectsInvalidTrimDirection)
+{
+    for (const Int64 direction :
+         {std::numeric_limits<Int64>::min(), Int64{-1}, Int64{4}, std::numeric_limits<Int64>::max()})
+    {
+        SCOPED_TRACE(direction);
+        const auto direction_column = createConstColumn<Int64>(2, direction);
+        const ColumnsWithTypeAndName inputs{
+            createConstColumn<String>(2, "xxax"),
+            createColumn<String>({"xxax", "xax"}),
+            createColumn<Nullable<String>>({"xxax", {}}),
+        };
+        for (size_t i = 0; i < inputs.size(); ++i)
+        {
+            SCOPED_TRACE(i);
+            try
+            {
+                executeFunction("tidbTrim", inputs[i], createConstColumn<String>(2, "x"), direction_column);
+                FAIL() << "Expected invalid TRIM direction to be rejected";
+            }
+            catch (const Exception & e)
+            {
+                EXPECT_EQ(e.code(), ErrorCodes::BAD_ARGUMENTS) << e.displayText();
+            }
+        }
     }
 }
 

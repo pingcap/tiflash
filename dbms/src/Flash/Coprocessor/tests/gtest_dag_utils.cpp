@@ -60,5 +60,45 @@ TEST(DAGUtilsTest, RejectsMalformedVectorFloat32Literal)
     }
 }
 
+TEST(DAGUtilsTest, RejectsMalformedInt64Literal)
+{
+    tipb::Expr expr;
+    expr.set_tp(tipb::ExprType::Int64);
+
+    for (const auto & value : {String{}, String(4, '\0'), String{"\x01\x02\x03\x04\x05\x06\x07", 7}})
+    {
+        expr.set_val(value);
+        EXPECT_THROW(decodeLiteral(expr), Exception);
+    }
+}
+
+TEST(DAGUtilsTest, RejectsMalformedUInt64Literal)
+{
+    tipb::Expr expr;
+    expr.set_tp(tipb::ExprType::Uint64);
+
+    for (const auto & value : {String{}, String(4, '\0'), String{"\x01\x02\x03\x04\x05\x06\x07", 7}})
+    {
+        expr.set_val(value);
+        EXPECT_THROW(decodeLiteral(expr), Exception);
+    }
+}
+
+TEST(DAGUtilsTest, RejectsMalformedDecimalLiteral)
+{
+    tipb::Expr expr;
+    expr.set_tp(tipb::ExprType::MysqlDecimal);
+
+    for (const auto & value : {
+             String{}, // no precision/scale header
+             String{"\x05\x02", 2}, // header without body
+             String{"\x05\x02\x01\x02", 4}, // body shorter than bin_size
+         })
+    {
+        expr.set_val(value);
+        EXPECT_THROW(decodeLiteral(expr), Exception);
+    }
+}
+
 } // namespace tests
 } // namespace DB

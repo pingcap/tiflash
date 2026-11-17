@@ -21,6 +21,12 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <TiDB/Decode/TypeMapping.h>
+#include <common/likely.h>
+
+namespace DB::ErrorCodes
+{
+extern const int CANNOT_READ_ALL_DATA;
+} // namespace DB::ErrorCodes
 
 namespace DB
 {
@@ -114,6 +120,8 @@ void CHBlockChunkCodec::WriteColumnData(
 
 void CHBlockChunkCodec::readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows)
 {
+    const size_t existing_rows = column.size();
+    CodecUtils::checkRowCount("CHBlockChunkCodec", rows, existing_rows);
     IDataType::InputStreamGetter input_stream_getter = [&](const IDataType::SubstreamPath &) {
         return &istr;
     };
@@ -124,6 +132,13 @@ void CHBlockChunkCodec::readData(const IDataType & type, IColumn & column, ReadB
         0,
         /*position_independent_encoding=*/true,
         {});
+    if (unlikely(column.size() != existing_rows + rows))
+        throw Exception(
+            ErrorCodes::CANNOT_READ_ALL_DATA,
+            "CHBlockChunkCodec decoded row count mismatch for {}: expected {}, got {}",
+            type.getName(),
+            existing_rows + rows,
+            column.size());
 }
 
 size_t ApproxBlockBytes(const Block & block)
@@ -211,6 +226,7 @@ void CHBlockChunkCodec::readBlockMeta(ReadBuffer & istr, size_t & columns, size_
 {
     readVarUInt(columns, istr);
     readVarUInt(rows, istr);
+    CodecUtils::checkRowCount("CHBlockChunkCodec", rows);
 
     if (header)
         CodecUtils::checkColumnSize("CHBlockChunkCodec", header.columns(), columns);

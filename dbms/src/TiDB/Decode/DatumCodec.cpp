@@ -185,6 +185,16 @@ inline int getBytes(PrecType prec, ScaleType scale)
     return words_int * wordSize + dig2Bytes[x_int] + words_frac * wordSize + dig2Bytes[x_frac];
 }
 
+/// Reject invalid precision/scale early, otherwise `getBytes` indexes dig2Bytes[]
+/// with negative digits derived from them.
+inline void checkDecimalPrecScale(PrecType prec, ScaleType frac)
+{
+    if (unlikely(prec < 1 || prec < frac))
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Wrong format, invalid decimal precision/scale. (checkDecimalPrecScale)");
+}
+
 inline UInt32 readWord(int binIdx, const String & dec, int size)
 {
     UInt32 v = 0;
@@ -225,6 +235,15 @@ T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType prec, Sc
 {
     static_assert(IsDecimal<T>);
 
+    checkDecimalPrecScale(prec, frac);
+    // The decimal type may come from the column schema (DecodeDecimalForCHRow)
+    // instead of this header, reject prec that exceeds what T can hold,
+    // otherwise the accumulation below would overflow.
+    if (unlikely(prec > maxDecimalPrecision<T>()))
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Wrong format, decimal precision exceeds decoding capacity. (DecodeDecimalImpl)");
+
     int digits_int = prec - frac;
     int words_int = digits_int / digitsPerWord;
     int leading_digits = digits_int - words_int * digitsPerWord;
@@ -234,6 +253,11 @@ T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType prec, Sc
     //    int wordsFracTo = wordsFrac + (trailingDigits > 0);
 
     int bin_size = getBytes(prec, frac);
+    // bin_size is derived from the (untrusted) precision/scale header, make sure
+    // the datum actually holds that many bytes, otherwise the word reads below
+    // would go out of bounds.
+    if (unlikely(cursor > raw_value.size() || raw_value.size() - cursor < static_cast<size_t>(bin_size)))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong format, cursor over buffer size. (DecodeDecimalImpl)");
     String dec = raw_value.substr(cursor, bin_size);
     cursor += bin_size;
     int mask = -1;
@@ -279,6 +303,8 @@ T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType prec, Sc
 
 Field DecodeDecimalForCHRow(size_t & cursor, const String & raw_value, const TiDB::ColumnInfo & column_info)
 {
+    if (unlikely(cursor > raw_value.size() || raw_value.size() - cursor < 2))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong format, cursor over buffer size. (DecodeDecimalForCHRow)");
     PrecType prec = static_cast<UInt8>(raw_value[cursor++]);
     ScaleType scale = static_cast<UInt8>(raw_value[cursor++]);
     auto type = createDecimal(column_info.flen, column_info.decimal);
@@ -306,6 +332,8 @@ Field DecodeDecimalForCHRow(size_t & cursor, const String & raw_value, const TiD
 
 Field DecodeDecimal(size_t & cursor, const String & raw_value)
 {
+    if (unlikely(cursor > raw_value.size() || raw_value.size() - cursor < 2))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong format, cursor over buffer size. (DecodeDecimal)");
     PrecType prec = static_cast<UInt8>(raw_value[cursor++]);
     ScaleType scale = static_cast<UInt8>(raw_value[cursor++]);
     auto type = createDecimal(prec, scale);
@@ -333,10 +361,18 @@ Field DecodeDecimal(size_t & cursor, const String & raw_value)
 
 void SkipDecimal(size_t & cursor, const String & raw_value)
 {
+    if (unlikely(cursor > raw_value.size() || raw_value.size() - cursor < 2))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong format, cursor over buffer size. (SkipDecimal)");
     PrecType prec = static_cast<UInt8>(raw_value[cursor++]);
     ScaleType frac = static_cast<UInt8>(raw_value[cursor++]);
 
+    checkDecimalPrecScale(prec, frac);
+    // bin_size is derived from the (untrusted) precision/scale header, make sure
+    // the datum actually holds that many bytes, otherwise `cursor` would silently
+    // advance past the end of raw_value.
     int bin_size = getBytes(prec, frac);
+    if (unlikely(raw_value.size() - cursor < static_cast<size_t>(bin_size)))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong format, cursor over buffer size. (SkipDecimal)");
     cursor += bin_size;
 }
 
@@ -432,6 +468,16 @@ Field DecodeDatum(size_t & cursor, const String & raw_value)
     }
 }
 
+/// The payload of a fixed-width datum (Int/UInt/Float/Duration) is exactly
+/// `width` bytes; make sure they are present instead of advancing `cursor`
+/// past the end of raw_value.
+inline void skipFixedWidthDatum(size_t & cursor, const String & raw_value, size_t width)
+{
+    if (unlikely(cursor > raw_value.size() || raw_value.size() - cursor < width))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong format, cursor over buffer size. (SkipDatum)");
+    cursor += width;
+}
+
 void SkipDatum(size_t & cursor, const String & raw_value)
 {
     switch (raw_value[cursor++])
@@ -439,10 +485,10 @@ void SkipDatum(size_t & cursor, const String & raw_value)
     case TiDB::CodecFlagNil:
         return;
     case TiDB::CodecFlagInt:
-        cursor += sizeof(Int64);
+        skipFixedWidthDatum(cursor, raw_value, sizeof(Int64));
         return;
     case TiDB::CodecFlagUInt:
-        cursor += sizeof(UInt64);
+        skipFixedWidthDatum(cursor, raw_value, sizeof(UInt64));
         return;
     case TiDB::CodecFlagBytes:
         SkipBytes(cursor, raw_value);
@@ -451,7 +497,7 @@ void SkipDatum(size_t & cursor, const String & raw_value)
         SkipCompactBytes(cursor, raw_value);
         return;
     case TiDB::CodecFlagFloat:
-        cursor += sizeof(UInt64);
+        skipFixedWidthDatum(cursor, raw_value, sizeof(UInt64));
         return;
     case TiDB::CodecFlagVarUInt:
         SkipVarUInt(cursor, raw_value);
@@ -460,7 +506,7 @@ void SkipDatum(size_t & cursor, const String & raw_value)
         SkipVarInt(cursor, raw_value);
         return;
     case TiDB::CodecFlagDuration:
-        cursor += sizeof(Int64);
+        skipFixedWidthDatum(cursor, raw_value, sizeof(Int64));
         return;
     case TiDB::CodecFlagDecimal:
         SkipDecimal(cursor, raw_value);

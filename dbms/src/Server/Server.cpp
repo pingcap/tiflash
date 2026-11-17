@@ -629,11 +629,6 @@ try
     {
         storage_config.s3_config.enable(/*check_requirements*/ true, log);
     }
-    else if (disagg_opt.mode == DisaggregatedMode::Compute && disagg_opt.use_autoscaler)
-    {
-        // compute node with auto scaler, the requirements will be initted later.
-        storage_config.s3_config.enable(/*check_requirements*/ false, log);
-    }
 
     if (storage_config.format_version != 0)
     {
@@ -673,6 +668,17 @@ try
             LOG_ERROR(log, message);
             throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, message);
         }
+    }
+    // Prevent tiflash-compute from starting without a proper S3 configuration.
+    // flash.use_columnar reads S3 through tiflash-columnar-hub, so it does not use
+    // TiFlash's storage.s3 config and is exempt from this check.
+    if (disagg_opt.mode == DisaggregatedMode::Compute && !disagg_opt.use_columnar
+        && !storage_config.s3_config.isS3Enabled())
+    {
+        const String message = "'storage.s3.bucket', 'storage.s3.endpoint' and 'storage.s3.root' must be set "
+                               "when 'flash.disaggregated_mode' is 'tiflash_compute'!";
+        LOG_ERROR(log, message);
+        throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, message);
     }
 
     // Safe point v2 is deprecated and replaced by keyspace-based safe point.
@@ -1059,12 +1065,6 @@ try
         proxy_machine.initKVStore(global_context->getTMTContext(), store_ident, kvs_watermark);
 
         global_context->getTMTContext().reloadConfig(config());
-        // setup the kv cluster for disagg compute node fetching config
-        if (S3::ClientFactory::instance().isEnabled())
-        {
-            auto & tmt = global_context->getTMTContext();
-            S3::ClientFactory::instance().setKVCluster(tmt.getKVCluster());
-        }
     }
     LOG_INFO(log, "Init S3 GC Manager");
     global_context->getTMTContext().initS3GCManager(proxy_machine.getProxyHelper());

@@ -32,11 +32,6 @@
 #include <memory>
 #include <mutex>
 
-namespace pingcap::kv
-{
-struct Cluster;
-}
-
 namespace DB::ErrorCodes
 {
 extern const int S3_ERROR;
@@ -166,19 +161,7 @@ public:
 
     void init(const StorageS3Config & config_, bool mock_s3_ = false);
 
-    void setKVCluster(pingcap::kv::Cluster * kv_cluster_)
-    {
-        std::unique_lock lock_init(mtx_init);
-        kv_cluster = kv_cluster_;
-    }
-
     void shutdown();
-
-    StorageS3Config getConfigCopy() const
-    {
-        std::unique_lock lock_init(mtx_init);
-        return config;
-    }
 
     std::shared_ptr<TiFlashS3Client> sharedTiFlashClient();
 
@@ -214,18 +197,14 @@ private:
         const StorageS3Config & storage_config,
         const LoggerPtr & log);
 
-    std::shared_ptr<TiFlashS3Client> initClientFromWriteNode();
-
-private:
     Aws::SDKOptions aws_options;
 
     std::atomic_bool client_is_inited = false;
-    mutable std::mutex mtx_init; // protect `config` `shared_tiflash_client` `kv_cluster`
+    mutable std::mutex mtx_init; // protect `config` and `shared_tiflash_client`
     StorageS3Config config;
     std::shared_ptr<TiFlashS3Client> shared_tiflash_client;
     std::shared_ptr<S3ReadLimiter> shared_s3_read_limiter;
     std::shared_ptr<S3ReadMetricsRecorder> shared_s3_read_metrics_recorder;
-    pingcap::kv::Cluster * kv_cluster = nullptr;
 
     LoggerPtr log;
 };

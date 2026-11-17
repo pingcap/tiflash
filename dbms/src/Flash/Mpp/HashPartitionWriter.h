@@ -51,7 +51,7 @@ private:
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;
-    uint16_t partition_num;
+    size_t partition_num;
     DataTypes expected_types;
     MPPDataPacketVersion data_codec_version;
     CompressionMethod compression_method{};
