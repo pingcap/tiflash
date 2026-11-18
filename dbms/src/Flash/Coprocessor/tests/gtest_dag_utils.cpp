@@ -13,7 +13,10 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/MyTime.h>
+#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <TiDB/Schema/TiDBTypes.h>
 #include <gtest/gtest.h>
 
@@ -96,6 +99,43 @@ TEST(DAGUtilsTest, RejectsMalformedDecimalLiteral)
          })
     {
         expr.set_val(value);
+        EXPECT_THROW(decodeLiteral(expr), Exception);
+    }
+}
+
+TEST(DAGUtilsTest, RejectsOutOfRangeMysqlTimeLiteral)
+{
+    tipb::Expr expr;
+    expr.set_tp(tipb::ExprType::MysqlTime);
+    expr.mutable_field_type()->set_tp(TiDB::TypeDatetime);
+
+    auto encodePacked = [](UInt64 packed) {
+        String val;
+        WriteBufferFromString buf(val);
+        encodeDAGUInt64(packed, buf);
+        val.resize(buf.count());
+        return val;
+    };
+
+    // In-range packed values are accepted and roundtrip.
+    for (const auto packed : {
+             UInt64(0), // zero date
+             MyDateTime(9999, 12, 31, 23, 59, 59, 999999).toPackedUInt(), // the max valid value
+         })
+    {
+        expr.set_val(encodePacked(packed));
+        EXPECT_EQ(decodeLiteral(expr).template safeGet<UInt64>(), packed);
+    }
+
+    // Out-of-range packed values can only come from untrusted requests and
+    // must be rejected before they reach datetime formatting.
+    for (const auto packed : {
+             MyDateTime(9999, 12, 31, 23, 59, 59, 0).toPackedUInt() + (UInt64(13) << 46), // year > 9999
+             MyDateTime(2020, 1, 1, 0, 0, 0, 999999).toPackedUInt() + 1, // micro_second > 999999
+             ~UInt64(0), // all bits set
+         })
+    {
+        expr.set_val(encodePacked(packed));
         EXPECT_THROW(decodeLiteral(expr), Exception);
     }
 }
