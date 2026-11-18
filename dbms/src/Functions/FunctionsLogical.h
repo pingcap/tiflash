@@ -1040,6 +1040,7 @@ public:
                 column = &nullable_column->getNestedColumn();
             }
 
+            const bool only_null = argument.column->onlyNull();
             UInt8Container converted;
             const UInt8Container * argument_values = nullptr;
             if (const auto * uint8_column = checkAndGetColumn<ColumnUInt8>(column))
@@ -1047,9 +1048,53 @@ public:
             else
             {
                 converted.resize(constant ? 1 : rows, 0);
-                if (!argument.column->onlyNull())
+                if (!only_null)
                     convertToUInt8(column, converted);
                 argument_values = &converted;
+            }
+
+            if (constant)
+            {
+                /// Constants are optimized in argument order, never reordered: an
+                /// absorbing constant only spares the arguments after it.
+                bool is_null = only_null || (argument_nulls && (*argument_nulls)[0]);
+                bool value = (*argument_values)[0] != 0;
+                if constexpr (null_as_false)
+                {
+                    /// NULL counts as false, reducing the constant to a two-valued one.
+                    value = !is_null && value;
+                    is_null = false;
+                }
+                if (Impl::canConstantBeIgnored(value, is_null))
+                    /// Identity element (AND TRUE / OR FALSE): no row needs updating.
+                    continue;
+                if (Impl::isSaturatedValue(value, is_null))
+                {
+                    /// Absorbing element (AND FALSE / OR TRUE): saturate the active
+                    /// rows and stop, so later arguments are not evaluated at all.
+                    /// Masked-off rows keep the identity value for the consumer.
+                    for (size_t row = 0; row < rows; ++row)
+                    {
+                        if (!mask[row])
+                            continue;
+                        data[row] = value;
+                        if (null_map)
+                            (*null_map)[row] = is_null;
+                    }
+                    break;
+                }
+                /// Only a NULL constant under three-valued logic reaches here: a
+                /// non-nullable result has no nullable input, and with null_as_false
+                /// NULL was folded into false above. It neither saturates nor can be
+                /// ignored, so merge it into the active rows; the mask stays unchanged.
+                for (size_t row = 0; row < rows; ++row)
+                {
+                    if (!mask[row])
+                        continue;
+                    std::tie(data[row], (*null_map)[row])
+                        = Impl::applyTwoNullable(data[row], (*null_map)[row], false, true);
+                }
+                continue;
             }
 
             size_t remaining = 0;
@@ -1057,9 +1102,8 @@ public:
             {
                 if (!mask[row])
                     continue;
-                const size_t index = constant ? 0 : row;
-                const bool is_null = argument.column->onlyNull() || (argument_nulls && (*argument_nulls)[index]);
-                const bool value = (*argument_values)[index] != 0;
+                const bool is_null = only_null || (argument_nulls && (*argument_nulls)[row]);
+                const bool value = (*argument_values)[row] != 0;
                 if constexpr (null_as_false)
                 {
                     data[row] = Impl::apply(data[row], !is_null && value);

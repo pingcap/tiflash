@@ -211,6 +211,168 @@ try
 }
 CATCH
 
+TEST_F(ShortCircuit, ConstantIdentityElementKeepsEvaluation)
+try
+{
+    for (const String name : {"and", "or"})
+    {
+        const bool is_or = name == "or";
+        for (const bool safe : {true, false})
+        {
+            Block input({
+                createColumn<Int64>(
+                    safe ? std::vector<Int64>{2, 4, 2, 4} : std::vector<Int64>{0, 2, 0, 4},
+                    "denominator"),
+                createConstColumn<UInt8>(4, is_or ? 0 : 1, "identity"),
+                createConstColumn<Int64>(4, 12, "numerator"),
+                createConstColumn<Int64>(4, 5, "five"),
+            });
+            ExpressionActions actions(input.getColumnsWithTypeAndName());
+            add(actions, "intDiv", {"numerator", "denominator"}, "division");
+            add(actions, "greater", {"division", "five"}, "comparison");
+            add(actions, name, {"identity", "comparison"}, "result");
+            actions.finalize({"result"});
+            Block block = input;
+            if (safe)
+            {
+                actions.execute(block);
+                // 12 DIV 2 = 6 > 5, 12 DIV 4 = 3 <= 5; the identity constant
+                // (AND TRUE / OR FALSE) must not change the result.
+                ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 0, 1, 0}), block.getByName("result"));
+            }
+            else
+            {
+                // The identity constant must not suppress the throwing deferred argument.
+                ASSERT_THROW(actions.execute(block), Exception);
+            }
+        }
+    }
+}
+CATCH
+
+TEST_F(ShortCircuit, ConstantAbsorbingElementSkipsRemainingArguments)
+{
+    for (const String name : {"and", "or"})
+    {
+        const UInt8 absorbing = name == "or" ? 1 : 0;
+        Block input({
+            // Every row would throw if the deferred division were evaluated.
+            createColumn<Int64>({0, 0, 0, 0}, "denominator"),
+            createConstColumn<UInt8>(4, absorbing, "absorbing"),
+            createConstColumn<Int64>(4, 12, "numerator"),
+            createConstColumn<Int64>(4, 5, "five"),
+        });
+        {
+            // AND FALSE / OR TRUE before the deferred argument saturates all rows,
+            // so the division is never evaluated.
+            ExpressionActions actions(input.getColumnsWithTypeAndName());
+            add(actions, "intDiv", {"numerator", "denominator"}, "division");
+            add(actions, "greater", {"division", "five"}, "comparison");
+            add(actions, name, {"absorbing", "comparison"}, "result");
+            actions.finalize({"result"});
+            Block block = input;
+            actions.execute(block);
+            ASSERT_COLUMN_EQ(
+                createColumn<UInt8>({absorbing, absorbing, absorbing, absorbing}),
+                block.getByName("result"));
+        }
+        {
+            // The same constant after the deferred argument does not rescue it:
+            // constants are optimized in argument order, never reordered.
+            ExpressionActions actions(input.getColumnsWithTypeAndName());
+            add(actions, "intDiv", {"numerator", "denominator"}, "division");
+            add(actions, "greater", {"division", "five"}, "comparison");
+            add(actions, name, {"comparison", "absorbing"}, "result");
+            actions.finalize({"result"});
+            Block block = input;
+            ASSERT_THROW(actions.execute(block), Exception);
+        }
+    }
+}
+
+TEST_F(ShortCircuit, AbsorbingConstantUnderExternalMask)
+{
+    // or(guard, and(FALSE, deferred division)): on the rows selected by the outer
+    // mask the inner absorbing constant saturates before the division, so nothing
+    // throws even though every denominator is zero.
+    Block input({
+        createColumn<UInt8>({1, 0, 0}, "guard"),
+        createColumn<Int64>({0, 0, 0}, "denominator"),
+        createConstColumn<UInt8>(3, 0, "absorbing"),
+        createConstColumn<Int64>(3, 6, "six"),
+    });
+    ExpressionActions actions(input.getColumnsWithTypeAndName());
+    add(actions, "intDiv", {"six", "denominator"}, "division");
+    add(actions, "and", {"absorbing", "division"}, "inner");
+    add(actions, "or", {"guard", "inner"}, "result");
+    actions.finalize({"result"});
+    // The division and the inner and are lazy, so the inner and runs under the
+    // external mask of the outer or.
+    ASSERT_EQ(lazyCount(actions), 2);
+    actions.execute(input);
+    ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 0, 0}), input.getByName("result"));
+}
+
+TEST_F(ShortCircuit, ConstantNullArgument)
+try
+{
+    auto null_const = createConstColumn<Nullable<UInt8>>(4, {}, "null_const");
+    {
+        // two_value_and treats NULL as false, i.e. an absorbing constant, so the
+        // deferred division is skipped despite the zero denominators.
+        Block input({
+            createColumn<Int64>({0, 0, 0, 0}, "denominator"),
+            null_const,
+            createConstColumn<Int64>(4, 6, "six"),
+        });
+        ExpressionActions actions(input.getColumnsWithTypeAndName());
+        add(actions, "intDiv", {"six", "denominator"}, "division");
+        add(actions, "two_value_and", {"null_const", "division"}, "result");
+        actions.finalize({"result"});
+        Block block = input;
+        actions.execute(block);
+        ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 0, 0, 0}), block.getByName("result"));
+    }
+    for (const String name : {"and", "or"})
+    {
+        const bool is_or = name == "or";
+        for (const bool safe : {true, false})
+        {
+            Block input({
+                createColumn<Int64>(
+                    safe ? std::vector<Int64>{2, 4, 2, 4} : std::vector<Int64>{0, 2, 0, 4},
+                    "denominator"),
+                null_const,
+                createConstColumn<Int64>(4, 12, "numerator"),
+                createConstColumn<Int64>(4, 5, "five"),
+            });
+            ExpressionActions actions(input.getColumnsWithTypeAndName());
+            add(actions, "intDiv", {"numerator", "denominator"}, "division");
+            add(actions, "greater", {"division", "five"}, "comparison");
+            add(actions, name, {"null_const", "comparison"}, "result");
+            actions.finalize({"result"});
+            Block block = input;
+            if (safe)
+            {
+                actions.execute(block);
+                // NULL AND true = NULL, NULL AND false = false;
+                // NULL OR true = true, NULL OR false = NULL.
+                ASSERT_COLUMN_EQ(
+                    is_or ? createColumn<Nullable<UInt8>>({1, {}, 1, {}})
+                          : createColumn<Nullable<UInt8>>({{}, 0, {}, 0}),
+                    block.getByName("result"));
+            }
+            else
+            {
+                // A NULL constant neither saturates nor is ignored under three-valued
+                // logic, so the throwing deferred argument is still evaluated.
+                ASSERT_THROW(actions.execute(block), Exception);
+            }
+        }
+    }
+}
+CATCH
+
 TEST_F(ShortCircuit, AllSelectedAndAllSkipped)
 {
     for (const UInt8 selected : {0, 1})
