@@ -448,7 +448,7 @@ add_target_pch("$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch-stl.h>
 add_target_pch("pch-stl.h" libprotobuf kvproto tipb libprotoc)
 
 # poco
-add_target_pch("pch-stl.h" Net Crypto Util Data NetSSL)
+add_target_pch("pch-stl.h" Net Crypto Util NetSSL)
 add_target_pch("$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch-stl.h>" Foundation JSON)
 
 # Show the important build flags and related proxy information for verification.
