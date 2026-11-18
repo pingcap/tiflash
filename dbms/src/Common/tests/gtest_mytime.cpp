@@ -839,5 +839,42 @@ TEST_F(TestMyTime, TimestampProjectionRejectsUnprovedRanges)
     EXPECT_EQ(projectTimestampRange(nullptr, 0, 0, value, value, nullptr, &upper), 0);
 }
 
+TEST_F(TestMyTime, PackedValueRangeCheck)
+try
+{
+    // The same layout as `MyTimeBase::toPackedUInt`
+    auto pack = [](UInt64 year, UInt64 month, UInt64 day, UInt64 hour, UInt64 minute, UInt64 second, UInt64 usec) {
+        return ((((((year * 13 + month) << 5) | day) << 17) | (hour << 12 | minute << 6 | second)) << 24) | usec;
+    };
+
+    // Valid values must be accepted, including the zero date and partially
+    // zero dates.
+    for (UInt64 packed : {
+             UInt64(0), // zero date
+             MyDateTime(9999, 12, 31, 23, 59, 59, 999999).toPackedUInt(), // the max valid value
+             MyDateTime(2020, 0, 0, 0, 0, 0, 0).toPackedUInt(), // partially zero date
+             MyDate(9999, 12, 31).toPackedUInt(),
+         })
+    {
+        ASSERT_TRUE(MyTimeBase::isPackedValueInRange(packed));
+    }
+
+    // Out-of-range values must be rejected: they can only come from untrusted
+    // input (e.g. a crafted coprocessor request) and would cause out-of-bounds
+    // reads in date formatting/serialization.
+    for (UInt64 packed : {
+             pack(10000, 1, 1, 0, 0, 0, 0), // year > 9999
+             pack(2020, 1, 1, 24, 0, 0, 0), // hour > 23
+             pack(2020, 1, 1, 0, 60, 0, 0), // minute > 59
+             pack(2020, 1, 1, 0, 0, 60, 0), // second > 59
+             pack(2020, 1, 1, 0, 0, 0, 1000000), // micro_second > 999999
+             ~UInt64(0), // all bits set
+         })
+    {
+        ASSERT_FALSE(MyTimeBase::isPackedValueInRange(packed));
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
