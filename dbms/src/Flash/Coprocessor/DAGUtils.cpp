@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Common/MyTime.h>
 #include <Common/ThresholdUtils.h>
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
@@ -1201,6 +1202,10 @@ Field decodeLiteral(const tipb::Expr & expr)
                 "MySQL Time literal without field_type" + expr.DebugString(),
                 Errors::Coprocessor::BadRequest);
         auto t = decodeDAGUInt64(expr.val());
+        if (unlikely(!MyTimeBase::isPackedValueInRange(t)))
+            throw TiFlashException(
+                "MySQL Time literal is out of range: " + std::to_string(t) + " " + expr.DebugString(),
+                Errors::Coprocessor::BadRequest);
         return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
     }
     case tipb::ExprType::MysqlDuration:
