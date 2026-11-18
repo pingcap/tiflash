@@ -27,6 +27,9 @@ namespace DB::DM
 
 IntegerSetPtr IntegerSet::createValueSet(const DataTypePtr & type, const Fields & values)
 {
+    if (!type)
+        return nullptr;
+
     auto type_id = removeNullable(type)->getTypeId();
     switch (type_id)
     {
@@ -67,6 +70,9 @@ IntegerSetPtr IntegerSet::createValueSet(const DataTypePtr & type, const Fields 
 
 IntegerSetPtr IntegerSet::createLessRangeSet(const DataTypePtr & type, const Field & max, bool not_included)
 {
+    if (!type)
+        return nullptr;
+
     auto func = []<typename T>(const Field & max, bool not_included) -> IntegerSetPtr {
         auto max_value = max.get<T>();
         if (max_value == std::numeric_limits<T>::min() && not_included)
@@ -117,6 +123,9 @@ IntegerSetPtr IntegerSet::createLessRangeSet(const DataTypePtr & type, const Fie
 
 IntegerSetPtr IntegerSet::createGreaterRangeSet(const DataTypePtr & type, const Field & min, bool not_included)
 {
+    if (!type)
+        return nullptr;
+
     auto func = []<typename T>(const Field & min, bool not_included) -> IntegerSetPtr {
         auto min_value = min.get<T>();
         if (min_value == std::numeric_limits<T>::max() && not_included)

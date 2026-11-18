@@ -12,10 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Storages/DeltaMerge/Filter/ColumnRange.h>
+
+namespace DB::ErrorCodes
+{
+extern const int BAD_ARGUMENTS;
+}
 
 namespace DB::DM
 {
+namespace
+{
+void ensureSameColumn(IndexID index_id, ColumnID existing_column_id, ColumnID incoming_column_id)
+{
+    if (existing_column_id != incoming_column_id)
+    {
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "Cannot merge inverted index ranges on index_id {} for different columns {} and {}",
+            index_id,
+            existing_column_id,
+            incoming_column_id);
+    }
+}
+} // namespace
 
 const ColumnRangePtr UnsupportedColumnRange::Instance = std::make_shared<UnsupportedColumnRange>();
 
@@ -43,20 +64,24 @@ ColumnRangePtr AndColumnRange::tryOptimize()
     new_children.clear();
 
     // Merge single sets on the same index by intersecting their integer sets
-    // Remove UnsupportedColumnRange
+    // Keep unsupported predicates for subsequent inversion.
+    bool has_unsupported = false;
     std::unordered_map<IndexID, std::pair<ColumnID, IntegerSetPtr>> merged_sets;
     for (auto & child : children)
     {
         if (auto single_child = std::dynamic_pointer_cast<SingleColumnRange>(child); single_child)
         {
             if (auto it = merged_sets.find(single_child->index_id); it != merged_sets.end())
-                it->second = {single_child->column_id, it->second.second->intersectWith(single_child->set)};
+            {
+                ensureSameColumn(single_child->index_id, it->second.first, single_child->column_id);
+                it->second.second = it->second.second->intersectWith(single_child->set);
+            }
             else
                 merged_sets[single_child->index_id] = {single_child->column_id, single_child->set};
         }
         else if (child->type == ColumnRangeType::Unsupported)
         {
-            // Skip
+            has_unsupported = true;
         }
         else
         {
@@ -76,6 +101,10 @@ ColumnRangePtr AndColumnRange::tryOptimize()
     // If there is only one child, return that child
     if (children.empty())
         return UnsupportedColumnRange::Instance;
+    // Dropping this marker would turn NOT(unsupported AND B) into NOT B,
+    // which can exclude matching rows. Keep it even when only one supported child remains.
+    if (has_unsupported)
+        children.push_back(UnsupportedColumnRange::create());
     if (children.size() == 1)
         return children.front();
     return this->shared_from_this();
@@ -86,6 +115,9 @@ BitmapFilterPtr AndColumnRange::check(std::function<BitmapFilterPtr(const Single
     BitmapFilterPtr result = nullptr;
     for (const auto & child : children)
     {
+        // Unsupported is needed by invert(), but cannot narrow this intersection.
+        if (child->type == ColumnRangeType::Unsupported)
+            continue;
         auto child_result = child->check(search, size);
         if (!result || !child_result)
             result = child_result;
@@ -126,7 +158,10 @@ ColumnRangePtr OrColumnRange::tryOptimize()
         if (auto single_child = std::dynamic_pointer_cast<SingleColumnRange>(child); single_child)
         {
             if (auto it = merged_sets.find(single_child->index_id); it != merged_sets.end())
-                it->second = {single_child->column_id, it->second.second->unionWith(single_child->set)};
+            {
+                ensureSameColumn(single_child->index_id, it->second.first, single_child->column_id);
+                it->second.second = it->second.second->unionWith(single_child->set);
+            }
             else
                 merged_sets[single_child->index_id] = {single_child->column_id, single_child->set};
         }

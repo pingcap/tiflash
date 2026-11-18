@@ -385,7 +385,9 @@ try
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), "2: {666}");
+        // Keep Unsupported so that negating this AND cannot discard matching rows.
+        EXPECT_EQ(sets->toDebugString(), "And[2: {666}, Unsupported]");
+        EXPECT_EQ(sets->invert()->type, DM::ColumnRangeType::Unsupported);
     }
 
     {
@@ -436,7 +438,10 @@ try
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), "2: {[-9223372036854775808, 665], [667, 9223372036854775807]}");
+        EXPECT_EQ(
+            sets->toDebugString(),
+            "And[2: {[-9223372036854775808, 665], [667, 9223372036854775807]}, Unsupported]");
+        EXPECT_EQ(sets->invert()->type, DM::ColumnRangeType::Unsupported);
     }
 
     {
@@ -521,7 +526,26 @@ try
             "\"col\":\"col_3\"}]}");
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), "2: {789}");
+        EXPECT_EQ(sets->toDebugString(), "And[2: {789}, Unsupported]");
+        EXPECT_EQ(sets->invert()->type, DM::ColumnRangeType::Unsupported);
+    }
+
+    // Exercise the parser-to-index path: NOT of a partially supported AND must keep every candidate.
+    for (const auto & query : {
+             "select * from default.t_111 where not (col_1 = 'test1' and col_2 = 666)",
+             "select * from default.t_111 where not (col_2 = 666 and col_1 = 'test1')",
+             "select * from default.t_111 where not ((col_1 = 'test1' and col_2 = 666) and col_3 = 789)",
+             "select * from default.t_111 where not (col_2 = 789 and col_3 is null)",
+         })
+    {
+        SCOPED_TRACE(query);
+        auto rs_operator = generateRsOperator(table_info_json, query);
+        auto sets = rs_operator->buildSets(used_indexes);
+        ASSERT_NE(sets, nullptr);
+        ASSERT_EQ(sets->type, DM::ColumnRangeType::Unsupported);
+        auto bitmap = sets->check({}, 3);
+        ASSERT_NE(bitmap, nullptr);
+        EXPECT_EQ(bitmap->toDebugString(), "111");
     }
 
     {
@@ -604,15 +628,8 @@ try
     ReadBufferFromMemory read_buffer(datetime.c_str(), datetime.size());
     UInt64 origin_time_stamp;
     ASSERT_TRUE(tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer));
-    const auto & time_zone_utc = DateLUT::instance("UTC");
-    UInt64 converted_time = origin_time_stamp;
 
-    {
-        // Greater between TimeStamp col and Datetime literal, use local timezone
-        auto ctx = TiFlashTestEnv::getContext();
-        auto & timezone_info = ctx->getTimezoneInfo();
-        convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
-
+    const auto check_timestamp = [&](TimezoneInfo & timezone_info) {
         auto rs_operator = generateRsOperator(
             table_info_json,
             fmt::format("select * from default.t_111 where col_timestamp > cast_string_datetime('{}')", datetime),
@@ -622,55 +639,26 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
+            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", origin_time_stamp)
+                + (timezone_info.is_utc_timezone
+                       ? ""
+                       : fmt::format(
+                           " [session_timezone={}]",
+                           timezone_info.is_name_based ? timezone_info.timezone_name
+                                                       : std::to_string(timezone_info.timezone_offset))));
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
-    }
-
-    {
-        // Greater between TimeStamp col and Datetime literal, use Chicago timezone
-        auto ctx = TiFlashTestEnv::getContext();
-        auto & timezone_info = ctx->getTimezoneInfo();
-        timezone_info.resetByTimezoneName("America/Chicago");
-        convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
-
-        auto rs_operator = generateRsOperator(
-            table_info_json,
-            fmt::format("select * from default.t_111 where col_timestamp > cast_string_datetime('{}')", datetime),
-            timezone_info);
-        EXPECT_EQ(rs_operator->name(), "greater");
-        EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
-        EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
         EXPECT_EQ(
-            rs_operator->toDebugString(),
-            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
-        auto sets = rs_operator->buildSets(used_indexes);
-        EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
-    }
-
-    {
-        // Greater between TimeStamp col and Datetime literal, use Chicago timezone
-        auto ctx = TiFlashTestEnv::getContext();
-        auto & timezone_info = ctx->getTimezoneInfo();
-        timezone_info.resetByTimezoneOffset(28800);
-        convertTimeZoneByOffset(origin_time_stamp, converted_time, false, timezone_info.timezone_offset);
-
-        auto rs_operator = generateRsOperator(
-            table_info_json,
-            fmt::format("select * from default.t_111 where col_timestamp > cast_string_datetime('{}')", datetime),
-            timezone_info);
-        EXPECT_EQ(rs_operator->name(), "greater");
-        EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
-        EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
-        EXPECT_EQ(
-            rs_operator->toDebugString(),
-            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
-        auto sets = rs_operator->buildSets(used_indexes);
-        EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
-    }
+            sets->toDebugString(),
+            timezone_info.is_utc_timezone ? fmt::format("4: [{}, 18446744073709551615]", origin_time_stamp + 1)
+                                          : "Unsupported");
+    };
+    TimezoneInfo timezone_info = TiFlashTestEnv::getContext()->getTimezoneInfo();
+    check_timestamp(timezone_info);
+    timezone_info.resetByTimezoneName("America/Chicago");
+    check_timestamp(timezone_info);
+    timezone_info.resetByTimezoneOffset(28800);
+    check_timestamp(timezone_info);
 
     {
         // Greater between Datetime col and Datetime literal
