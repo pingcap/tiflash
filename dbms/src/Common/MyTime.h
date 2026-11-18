@@ -104,6 +104,14 @@ struct MyTimeBase
     UInt64 toPackedUInt() const;
     UInt64 toCoreTime() const;
 
+    // Whether all fields unpacked from the packed value are within the valid
+    // ranges documented above. A legitimate packed value produced by TiDB's
+    // `toPackedUint` always satisfies this; violations can only come from
+    // untrusted input (e.g. a crafted coprocessor request) and would cause
+    // out-of-bounds reads in date formatting/serialization, so they must be
+    // rejected before use.
+    static bool isPackedValueInRange(UInt64 packed);
+
     // DateFormat returns a textual representation of the time value formatted
     // according to layout
     // See http://dev.mysql.com/doc/refman/5.7/en/date-and-time-functions.html#function_date-format
