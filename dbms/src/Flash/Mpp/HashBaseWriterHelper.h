@@ -53,7 +53,7 @@ void scatterColumns(
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & collators,
     std::vector<String> & partition_key_containers,
-    uint32_t bucket_num,
+    size_t bucket_num,
     std::vector<std::vector<MutableColumnPtr>> & result_columns);
 
 void scatterColumnsSelectiveBlock(
@@ -61,7 +61,7 @@ void scatterColumnsSelectiveBlock(
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & collators,
     std::vector<String> & partition_key_containers,
-    uint32_t bucket_num,
+    size_t bucket_num,
     std::vector<std::vector<MutableColumnPtr>> & result_columns);
 
 void scatterColumnsForFineGrainedShuffle(
@@ -69,7 +69,7 @@ void scatterColumnsForFineGrainedShuffle(
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & collators,
     std::vector<String> & partition_key_containers,
-    uint32_t part_num,
+    size_t part_num,
     uint32_t fine_grained_shuffle_stream_count,
     WeakHash32 & hash,
     IColumn::Selector & selector,
@@ -80,7 +80,7 @@ void scatterColumnsForFineGrainedShuffleSelectiveBlock(
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & collators,
     std::vector<String> & partition_key_containers,
-    uint32_t part_num,
+    size_t part_num,
     uint32_t fine_grained_shuffle_stream_count,
     WeakHash32 & hash,
     IColumn::Selector & selector,
