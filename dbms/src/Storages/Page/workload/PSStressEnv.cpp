@@ -123,7 +123,7 @@ void setupSignal()
 {
     signal(SIGINT, [](int /*signal*/) {
         LOG_INFO(Logger::get(), "Receive finish signal. Wait for the threads finish");
-        StressEnvStatus::getInstance().setStat(STATUS_INTERRUPT);
+        StressEnvStatus::getInstance().setStat(StressEnvStat::STATUS_INTERRUPT);
         PageWorkloadFactory::getInstance().stopWorkload();
     });
 }

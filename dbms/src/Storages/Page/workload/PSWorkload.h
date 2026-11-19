@@ -205,7 +205,7 @@ private:
 };
 
 template <class Workload>
-void work_load_register()
+void workload_register()
 {
     PageWorkloadFactory::getInstance().reg(
         Workload::nameFunc(),
