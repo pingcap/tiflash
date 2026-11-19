@@ -34,7 +34,10 @@ std::unique_ptr<ReadBufferFromFileBase> ChecksumReadBufferBuilder::build(
     int flags_)
 {
     auto file = file_provider->newRandomAccessFile(filename_, encryption_path_, read_limiter, flags_);
+    RUNTIME_CHECK_MSG(checksum_frame_size > 0, "Invalid checksum frame size for {}", filename_);
     auto allocation_size = std::min(estimated_size, checksum_frame_size);
+    if (allocation_size == 0)
+        allocation_size = 1;
     switch (checksum_algorithm)
     {
     case ChecksumAlgo::None:
@@ -58,7 +61,10 @@ std::unique_ptr<ReadBufferFromFileBase> ChecksumReadBufferBuilder::build(
     ChecksumAlgo checksum_algorithm,
     size_t checksum_frame_size)
 {
+    RUNTIME_CHECK_MSG(checksum_frame_size > 0, "Invalid checksum frame size for {}", file_name);
     auto allocation_size = std::min(data.size(), checksum_frame_size);
+    if (allocation_size == 0)
+        allocation_size = 1;
     auto file = std::make_shared<MemoryRandomAccessFile>(file_name, std::forward<String>(data));
     switch (checksum_algorithm)
     {
