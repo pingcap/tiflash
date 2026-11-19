@@ -16,7 +16,7 @@
 #include <IO/UseSSL.h>
 
 #if Poco_NetSSL_FOUND
-#include <Poco/Net/SSLManager.h>
+#include <Poco/Net/NetSSL.h>
 #endif
 
 namespace DB
