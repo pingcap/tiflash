@@ -146,7 +146,7 @@ struct MockWriter
         tracked_packet->serializeByResponse(response);
         queue->push(tracked_packet);
     }
-    static uint16_t getPartitionNum() { return 1; }
+    static size_t getPartitionNum() { return 1; }
     static WaitResult waitForWritable() { return WaitResult::Ready; }
 
     std::vector<tipb::FieldType> result_field_types;

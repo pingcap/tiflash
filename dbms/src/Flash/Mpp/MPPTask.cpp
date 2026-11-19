@@ -423,7 +423,14 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
     }
 
     MPPTaskId receiver_id(request->receiver_meta());
-    RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
+    if (unlikely(tunnel_set == nullptr))
+    {
+        auto err_msg = fmt::format(
+            "can't find tunnel ({} + {}) because the task has no tunnel set",
+            request->sender_meta().task_id(),
+            request->receiver_meta().task_id());
+        return {nullptr, err_msg};
+    }
     auto tunnel_ptr = tunnel_set->getTunnelByReceiverTaskId(receiver_id);
     if (tunnel_ptr == nullptr)
     {
