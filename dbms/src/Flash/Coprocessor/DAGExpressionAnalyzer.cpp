@@ -471,6 +471,14 @@ void DAGExpressionAnalyzer::buildGroupConcat(
     NamesAndTypes & aggregated_columns,
     bool result_is_nullable)
 {
+    if (expr.children_size() < 2)
+    {
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "GROUP_CONCAT requires at least one value and a separator, got {} arguments",
+            expr.children_size());
+    }
+
     AggregateDescription aggregate;
     /// the last parametric is the separator
     auto child_size = expr.children_size() - 1;

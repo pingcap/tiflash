@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Interpreters/Context.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Schema/TiDB.h>
 #include <gtest/gtest.h>
+
+#include <ext/scope_guard.h>
 
 namespace DB
 {
@@ -43,10 +47,9 @@ public:
         task_meta->set_start_ts(gather_id.query_id.start_ts);
         task_meta->set_resource_group_name(gather_id.query_id.resource_group_name);
     }
-    ContextPtr createContextForTest()
+    ContextPtr createContextForTest(const String & query_id = "query_id_for_test")
     {
         auto context = std::make_shared<Context>(*global_context);
-        String query_id = "query_id_for_test";
         context->setCurrentQueryId(query_id);
         return context;
     }
@@ -54,6 +57,45 @@ public:
 protected:
     std::unique_ptr<Context> global_context;
 };
+
+TEST_F(TestMPPTaskManager, RejectsExchangeSenderWithoutReceivers)
+{
+    for (Int64 max_buffered_bytes : {Int64{0}, Int64{1024}})
+    {
+        SCOPED_TRACE(max_buffered_bytes);
+        auto context = createContextForTest(fmt::format("empty_exchange_sender_{}", max_buffered_bytes));
+        context->getSettingsRef().max_buffered_bytes_in_executor = max_buffered_bytes;
+
+        auto gather_id = MPPGatherId(1, MPPQueryId(max_buffered_bytes + 1, 1, 1, 1, "", 1, ""));
+        mpp::DispatchTaskRequest request;
+        fillTaskMeta(request.mutable_meta(), 1, gather_id);
+        request.set_timeout(1);
+
+        tipb::DAGRequest dag;
+        auto * root = dag.mutable_root_executor();
+        root->set_tp(tipb::TypeExchangeSender);
+        root->set_executor_id("sender");
+        auto * sender = root->mutable_exchange_sender();
+        sender->set_tp(tipb::PassThrough);
+        sender->add_all_field_types()->set_tp(TiDB::TypeLongLong);
+        auto * child = sender->mutable_child();
+        child->set_tp(tipb::TypeTableScan);
+        child->set_executor_id("scan");
+        request.set_encoded_plan(dag.SerializeAsString());
+
+        auto task = MPPTask::newTask(request.meta(), context);
+        SCOPE_EXIT({ task->handleError("invalid ExchangeSender rejected by test"); });
+        try
+        {
+            task->prepare(request);
+            FAIL() << "Expected an ExchangeSender without receivers to be rejected";
+        }
+        catch (const TiFlashException & e)
+        {
+            EXPECT_TRUE(e.getError().is(Errors::Coprocessor::BadRequest)) << e.standardText();
+        }
+    }
+}
 
 TEST_F(TestMPPTaskManager, testUnregisterMPPTask)
 try
