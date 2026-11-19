@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/PhysicalPlan.h>
@@ -142,6 +143,36 @@ String replaceStringName(String s)
 {
     return boost::replace_all_copy(s, "{StringName}", DataTypeString::getDefaultName());
 }
+
+TEST_F(PhysicalPlanTestRunner, RejectsInvalidRootCount)
+try
+{
+    auto request = context.scan("test_db", "test_table").build(context, DAGRequestType::list);
+    DAGContext dagContext(*request, "executor_test", /*max_streams=*/1);
+    TiFlashTestEnv::setUpTestContext(*context.context, &dagContext, context.mockStorage(), TestType::EXECUTOR_TEST);
+
+    // Bypass request validation to exercise the planner's own check for multiple roots.
+    auto extraScan = request->executors(0);
+    extraScan.set_executor_id("extra_scan");
+    *request->add_executors() = extraScan;
+    for (bool buildList : {false, true})
+    {
+        SCOPED_TRACE(buildList);
+        PhysicalPlan physicalPlan{*context.context, log->identifier()};
+        if (buildList)
+            physicalPlan.build(request.get());
+        try
+        {
+            physicalPlan.outputAndOptimize();
+            ADD_FAILURE() << "Expected an invalid number of plan roots to be rejected";
+        }
+        catch (const TiFlashException & e)
+        {
+            EXPECT_TRUE(e.getError().is(Errors::Coprocessor::BadRequest)) << e.standardText();
+        }
+    }
+}
+CATCH
 
 TEST_F(PhysicalPlanTestRunner, Filter)
 try
