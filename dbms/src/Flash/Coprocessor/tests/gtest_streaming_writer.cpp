@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
+#include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDB.h>
@@ -25,6 +26,7 @@
 
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <cstddef>
+#include <limits>
 
 namespace DB
 {
@@ -99,6 +101,80 @@ struct MockStreamWriter
 private:
     MockStreamWriterChecker checker;
 };
+
+template <typename Writer>
+class TestDAGWriter : public Writer
+{
+public:
+    using Writer::Writer;
+
+    // Stop a regression before write() can enter a loop that makes no progress.
+    bool hasValidChunkSize() const { return this->records_per_chunk > 0 || this->records_per_chunk == -1; }
+};
+
+TEST_F(TestStreamingWriter, InvalidRecordsPerChunkUsesDefault)
+{
+    using UnaryWriter = TestDAGWriter<UnaryDAGResponseWriter>;
+    using StreamingWriter = TestDAGWriter<StreamingDAGResponseWriter<std::shared_ptr<MockStreamWriter>>>;
+    const std::vector<Int64> chunk_sizes{0, -2, std::numeric_limits<Int64>::min()};
+    const Block block = prepareBlock(DEFAULT_DAG_RECORDS_PER_CHUNK + 1);
+    for (auto encode_type : {tipb::TypeDefault, tipb::TypeChunk, tipb::TypeCHBlock})
+    {
+        SCOPED_TRACE(encode_type);
+        dag_context_ptr->encode_type = encode_type;
+        tipb::SelectResponse expected;
+        UnaryDAGResponseWriter reference(&expected, DEFAULT_DAG_RECORDS_PER_CHUNK, *dag_context_ptr);
+        reference.write(block);
+        reference.flush();
+        ASSERT_EQ(expected.chunks_size(), encode_type == tipb::TypeCHBlock ? 1 : 2);
+
+        for (Int64 records_per_chunk : chunk_sizes)
+        {
+            SCOPED_TRACE(records_per_chunk);
+            tipb::SelectResponse response;
+            UnaryWriter unary_writer(&response, records_per_chunk, *dag_context_ptr);
+            ASSERT_TRUE(unary_writer.hasValidChunkSize());
+            unary_writer.write(block);
+            unary_writer.flush();
+
+            std::vector<tipb::SelectResponse> write_report;
+            auto mock_writer = std::make_shared<MockStreamWriter>(
+                [&](tipb::SelectResponse & resp) { write_report.emplace_back(std::move(resp)); });
+            StreamingWriter streaming_writer(mock_writer, records_per_chunk, 1, 16 * 1024 * 1024, *dag_context_ptr);
+            ASSERT_TRUE(streaming_writer.hasValidChunkSize());
+            streaming_writer.write(block);
+            streaming_writer.flush();
+
+            ASSERT_EQ(response.chunks_size(), expected.chunks_size());
+            ASSERT_EQ(write_report.size(), 1);
+            ASSERT_EQ(write_report.front().chunks_size(), expected.chunks_size());
+            for (int i = 0; i < expected.chunks_size(); ++i)
+            {
+                EXPECT_EQ(response.chunks(i).rows_data(), expected.chunks(i).rows_data());
+                EXPECT_EQ(write_report.front().chunks(i).rows_data(), expected.chunks(i).rows_data());
+            }
+        }
+    }
+}
+
+TEST_F(TestStreamingWriter, AllowsNonzeroRecordsPerChunk)
+{
+    using MockDAGWriter = StreamingDAGResponseWriter<std::shared_ptr<MockStreamWriter>>;
+    const std::vector<Int64> chunk_sizes{-1, 1, DEFAULT_DAG_RECORDS_PER_CHUNK};
+    auto mock_writer = std::make_shared<MockStreamWriter>([](tipb::SelectResponse &) {});
+    for (auto encode_type : {tipb::TypeDefault, tipb::TypeChunk, tipb::TypeCHBlock})
+    {
+        SCOPED_TRACE(encode_type);
+        dag_context_ptr->encode_type = encode_type;
+        for (Int64 records_per_chunk : chunk_sizes)
+        {
+            SCOPED_TRACE(records_per_chunk);
+            tipb::SelectResponse response;
+            EXPECT_NO_THROW(UnaryDAGResponseWriter(&response, records_per_chunk, *dag_context_ptr));
+            EXPECT_NO_THROW(MockDAGWriter(mock_writer, records_per_chunk, 1, 1024, *dag_context_ptr));
+        }
+    }
+}
 
 TEST_F(TestStreamingWriter, testStreamingWriter)
 try

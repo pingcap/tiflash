@@ -14,13 +14,13 @@
 
 #pragma once
 
-#include <assert.h>
+#include <Common/Exception.h>
 
 #include <algorithm>
 
 inline size_t getAverageThreshold(size_t threshold, size_t concurrency)
 {
-    assert(concurrency > 0);
+    RUNTIME_CHECK(concurrency > 0);
     if (threshold == 0)
         return 0;
     return std::max(static_cast<size_t>(1), threshold / concurrency);
