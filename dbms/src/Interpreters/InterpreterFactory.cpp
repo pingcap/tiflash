@@ -128,6 +128,7 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(
     }
     else if (typeid_cast<ASTDBGInvokeQuery *>(query.get()))
     {
+        /// readonly is checked inside InterpreterDBGInvokeQuery
         return std::make_unique<InterpreterDBGInvokeQuery>(query, context);
     }
 
