@@ -492,6 +492,51 @@ TEST_F(TestMPPTunnel, SyncWriteAfterFinished)
 }
 
 /// Test Async MPPTunnel
+TEST_F(TestMPPTunnel, AsyncConnectRejectsLocalTunnel)
+try
+{
+    auto receiver = std::make_shared<MockExchangeReceiver>(1);
+    auto tunnel = constructLocalTunnel();
+    MockAsyncCallData callData;
+    EXPECT_THROW(tunnel->connectAsync(&callData), Exception);
+    EXPECT_FALSE(getTunnelConnectedFlag(tunnel));
+    EXPECT_FALSE(getTunnelFinishedFlag(tunnel));
+    ASSERT_EQ(tunnel->getTunnelSender(), nullptr);
+    ASSERT_EQ(callData.async_tunnel_sender, nullptr);
+
+    std::vector<MPPTunnelPtr> tunnels{tunnel};
+    receiver->connectLocalTunnel(tunnels);
+    tunnel->write(newDataPacket("First"));
+    tunnel->writeDone();
+    receiver->receiveAll();
+
+    ASSERT_EQ(receiver->getReceivedMsgs().size(), 1);
+    EXPECT_EQ(receiver->getReceivedMsgs().front()->getPacket().data(), "First");
+}
+CATCH
+
+TEST_F(TestMPPTunnel, AsyncConnectRejectsSyncTunnel)
+try
+{
+    auto writer = std::make_unique<MockPacketWriter>();
+    auto tunnel = constructRemoteSyncTunnel();
+    MockAsyncCallData callData;
+    EXPECT_THROW(tunnel->connectAsync(&callData), Exception);
+    EXPECT_FALSE(getTunnelConnectedFlag(tunnel));
+    EXPECT_FALSE(getTunnelFinishedFlag(tunnel));
+    ASSERT_EQ(tunnel->getTunnelSender(), nullptr);
+    ASSERT_EQ(callData.async_tunnel_sender, nullptr);
+
+    tunnel->connectSync(writer.get());
+    tunnel->write(newDataPacket("First"));
+    tunnel->writeDone();
+    waitSyncTunnelSenderThread(tunnel->getSyncTunnelSender());
+
+    ASSERT_EQ(writer->write_packet_vec.size(), 1);
+    EXPECT_EQ(writer->write_packet_vec.front(), "First");
+}
+CATCH
+
 TEST_F(TestMPPTunnel, AsyncConnectWriteCancel)
 try
 {

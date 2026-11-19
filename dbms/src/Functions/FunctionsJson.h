@@ -72,6 +72,12 @@ inline bool isNullJsonBinary(size_t size)
     return size == 0;
 }
 
+inline void checkJsonBinaryNotEmpty(size_t size)
+{
+    if (unlikely(size == 0))
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Empty binary JSON input");
+}
+
 using namespace GatherUtils;
 
 class FunctionJsonExtract : public IFunction
@@ -217,7 +223,7 @@ private:
             }
 
             const auto & json_val = json_source->getWhole();
-            assert(json_val.size > 0);
+            checkJsonBinaryNotEmpty(json_val.size);
             JsonBinary json_binary(json_val.data[0], StringRef(&json_val.data[1], json_val.size - 1));
             if (!json_binary.extract(path_expr_container_vec, write_buffer))
                 null_map_to[row] = 1;
@@ -283,7 +289,7 @@ private:
             }
 
             const auto & json_val = json_source->getWhole();
-            assert(json_val.size > 0);
+            checkJsonBinaryNotEmpty(json_val.size);
             JsonBinary json_binary(json_val.data[0], StringRef(&json_val.data[1], json_val.size - 1));
             auto path_expr_container_vec = buildJsonPathExprContainer(path_sources);
             if (!json_binary.extract(path_expr_container_vec, write_buffer))
@@ -689,7 +695,7 @@ private:
             }
 
             const auto & json_val = json_source->getWhole();
-            assert(json_val.size > 0);
+            checkJsonBinaryNotEmpty(json_val.size);
             JsonBinary json_binary(json_val.data[0], StringRef(&json_val.data[1], json_val.size - 1));
             if (json_binary.getType() == JsonBinary::TYPE_CODE_ARRAY
                 || json_binary.getType() == JsonBinary::TYPE_CODE_OBJECT)
@@ -742,7 +748,7 @@ private:
             }
 
             const auto & json_val = json_source->getWhole();
-            assert(json_val.size > 0);
+            checkJsonBinaryNotEmpty(json_val.size);
             JsonBinary json_binary(json_val.data[0], StringRef(&json_val.data[1], json_val.size - 1));
 
             const auto & path_val = path_source->getWhole();
@@ -796,7 +802,7 @@ private:
             }
 
             const auto & json_val = json_source->getWhole();
-            assert(json_val.size > 0);
+            checkJsonBinaryNotEmpty(json_val.size);
             JsonBinary json_binary(json_val.data[0], StringRef(&json_val.data[1], json_val.size - 1));
             auto extract_json_binaries = json_binary.extract(path_expr_container_vec);
             if (extract_json_binaries.empty())
@@ -2004,6 +2010,7 @@ private:
             }
 
             const auto & json_val = json_source->getWhole();
+            checkJsonBinaryNotEmpty(json_val.size);
             JsonBinary json_binary{json_val.data[0], StringRef{&json_val.data[1], json_val.size - 1}};
 
             auto contains_type = getTypeVal(type_source->getWhole());
@@ -2141,6 +2148,7 @@ private:
             }
 
             const auto & json_val = json_source->getWhole();
+            checkJsonBinaryNotEmpty(json_val.size);
             JsonBinary json_binary{json_val.data[0], StringRef{&json_val.data[1], json_val.size - 1}};
 
             auto & res = data_to[row]; // default 1.
@@ -2575,7 +2583,7 @@ private:
             auto path_expr_container_vec = buildPathExprContainer(StringRef{path_val.data, path_val.size});
 
             const auto & json_val = json_source->getWhole();
-            assert(json_val.size > 0);
+            checkJsonBinaryNotEmpty(json_val.size);
             JsonBinary json_binary{json_val.data[0], StringRef{&json_val.data[1], json_val.size - 1}};
             if (json_binary.getType() != JsonBinary::TYPE_CODE_OBJECT)
             {
@@ -2635,7 +2643,7 @@ private:
             }
 
             const auto & json_val = json_source->getWhole();
-            assert(json_val.size > 0);
+            checkJsonBinaryNotEmpty(json_val.size);
             JsonBinary json_binary{json_val.data[0], StringRef{&json_val.data[1], json_val.size - 1}};
             if (json_binary.getType() != JsonBinary::TYPE_CODE_OBJECT)
             {
