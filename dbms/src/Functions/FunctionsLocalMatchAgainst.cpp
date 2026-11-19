@@ -247,7 +247,6 @@ struct CompiledBooleanQuery
     std::vector<BooleanClause> clauses;
     size_t must_clause_count = 0;
     bool has_must_not = false;
-    bool matches_nothing = false;
     std::unique_ptr<ExactTermRoute> exact_route;
 };
 
@@ -538,14 +537,12 @@ bool isDefaultStopword(std::string_view token, size_t code_points, const Builtin
 bool containsNgramStopword(
     std::string_view token,
     const std::vector<size_t> & char_boundaries,
-    size_t ngram_start,
-    size_t ngram_token_size,
     const BuiltinStopwordLookup * stopwords)
 {
-    const size_t ngram_end = ngram_start + ngram_token_size;
-    for (size_t start = ngram_start; start < ngram_end; ++start)
+    const size_t char_count = char_boundaries.size() - 1;
+    for (size_t start = 0; start < char_count; ++start)
     {
-        for (size_t end = start + 1; end <= ngram_end; ++end)
+        for (size_t end = start + 1; end <= char_count; ++end)
         {
             const auto candidate = token.substr(char_boundaries[start], char_boundaries[end] - char_boundaries[start]);
             if (!stopwords && defaultStopwords().contains(Poco::UTF8::toLower(String(candidate))))
@@ -647,7 +644,7 @@ void analyzeNgramTextInto(
             // lookup. The document stream still has only fixed-size grams.
             if (keep_short_runs)
             {
-                if (!enable_stopword || !containsNgramStopword(run, char_boundaries, 0, char_count, stopwords))
+                if (!enable_stopword || !containsNgramStopword(run, char_boundaries, stopwords))
                 {
                     result.append(run, base_position);
                     if (!collator)
@@ -940,8 +937,6 @@ ALWAYS_INLINE ColumnMatchResult updateBooleanMatchStatesForColumn(
     size_t & matched_must_clauses)
 {
     const auto & clauses = query.clauses;
-    if (query.matches_nothing || clauses.empty())
-        return ColumnMatchResult::Continue;
 
     // Raw phrase verification searches the entire column, so a failed result
     // needs no recheck at later anchors. Unlike positive clause matches, this
@@ -1042,38 +1037,6 @@ ColumnMatchResult updateExactMatchStatesForColumn(
     return ColumnMatchResult::Continue;
 }
 
-bool evaluateBooleanMatchResult(const CompiledBooleanQuery & query, const std::vector<ClauseMatchState> & states)
-{
-    if (query.matches_nothing || query.clauses.empty())
-        return false;
-    bool has_positive = false;
-    bool has_must = false;
-    bool positive_match = false;
-    for (size_t i = 0; i < query.clauses.size(); ++i)
-    {
-        const auto & clause = query.clauses[i];
-        const bool matched = states[i].matched;
-        switch (clause.modifier)
-        {
-        case BooleanClause::Modifier::Must:
-            has_must = true;
-            if (!matched)
-                return false;
-            break;
-        case BooleanClause::Modifier::MustNot:
-            if (matched)
-                return false;
-            break;
-        case BooleanClause::Modifier::Should:
-            has_positive = true;
-            positive_match = positive_match || matched;
-            break;
-        }
-    }
-
-    return has_must || !has_positive || positive_match;
-}
-
 CompiledBooleanQuery compileBooleanQuery(
     const tipb::LocalMatchAgainstBooleanQuery & query,
     const LocalMatchAnalyzerConfig & config,
@@ -1082,10 +1045,7 @@ CompiledBooleanQuery compileBooleanQuery(
 {
     CompiledBooleanQuery compiled;
     if (!config.use_ngram && (config.max_token_size == 0 || config.min_token_size > config.max_token_size))
-    {
-        compiled.matches_nothing = true;
-        return compiled;
-    }
+        return {};
     auto analyze_query = [&](std::string_view text) {
         if (config.use_ngram)
             return analyzeNgramText(text, config.ngram_token_size, collator, stopwords, config.enable_stopword, true);
@@ -1231,10 +1191,7 @@ CompiledBooleanQuery compileBooleanQuery(
             // retain their existing no-match handling, rather than being
             // hidden by an earlier block-level shortcut.
             if (clause.terms.empty())
-            {
-                compiled.matches_nothing = true;
-                return compiled;
-            }
+                return {};
             ++compiled.must_clause_count;
         }
         else if (clause.modifier == BooleanClause::Modifier::MustNot)
@@ -1246,7 +1203,7 @@ CompiledBooleanQuery compileBooleanQuery(
     if (std::none_of(compiled.clauses.begin(), compiled.clauses.end(), [](const BooleanClause & clause) {
             return clause.modifier != BooleanClause::Modifier::MustNot;
         }))
-        compiled.matches_nothing = true;
+        return {};
 
     return compiled;
 }
@@ -1355,57 +1312,39 @@ std::unique_ptr<ExactTermRoute> buildExactTermRoute(
     return route;
 }
 
-Float64 matchBooleanValue(const CompiledBooleanQuery & query, const std::vector<ClauseMatchState> & states)
-{
-    // Local MATCH returns a Boolean 0/1 value, not a relevance score.
-    return evaluateBooleanMatchResult(query, states) ? 1 : 0;
-}
-
 class FullTextColumnAccessor
 {
 public:
-    explicit FullTextColumnAccessor(const IColumn & column) { initialize(column, false); }
+    explicit FullTextColumnAccessor(const IColumn & column)
+    {
+        const auto * constant = typeid_cast<const ColumnConst *>(&column);
+        is_constant = constant != nullptr;
+        const IColumn * data = constant ? &constant->getDataColumn() : &column;
+        // ColumnNullable materializes constant nested data, so only an outer
+        // ColumnConst needs to map both the null map and the string to row 0.
+        nullable_column = typeid_cast<const ColumnNullable *>(data);
+        if (nullable_column)
+            data = &nullable_column->getNestedColumn();
+        string_column = checkAndGetColumn<ColumnString>(data);
+        if (!string_column)
+            throw Exception("Full-text arguments must be string columns", ErrorCodes::ILLEGAL_COLUMN);
+    }
 
     bool isNull(size_t row) const
     {
-        return nullable_column != nullptr && nullable_column->getNullMapData()[nullable_is_constant ? 0 : row] != 0;
+        return nullable_column && nullable_column->getNullMapData()[is_constant ? 0 : row] != 0;
     }
 
     std::string_view getString(size_t row) const
     {
-        const auto & chars = string_column->getChars();
-        const auto & offsets = string_column->getOffsets();
-        const size_t string_row = string_is_constant ? 0 : row;
-        const size_t begin = string_row == 0 ? 0 : offsets[string_row - 1];
-        const size_t end = offsets[string_row];
-        return {reinterpret_cast<const char *>(&chars[begin]), end - begin - 1};
+        const auto value = string_column->getDataAt(is_constant ? 0 : row);
+        return {value.data, value.size};
     }
 
 private:
-    void initialize(const IColumn & column, bool row_is_constant)
-    {
-        if (const auto * column_const = typeid_cast<const ColumnConst *>(&column))
-        {
-            string_is_constant = true;
-            initialize(column_const->getDataColumn(), true);
-            return;
-        }
-        if (const auto * column_nullable = typeid_cast<const ColumnNullable *>(&column))
-        {
-            nullable_column = column_nullable;
-            nullable_is_constant = row_is_constant;
-            initialize(column_nullable->getNestedColumn(), row_is_constant);
-            return;
-        }
-        string_column = checkAndGetColumn<ColumnString>(&column);
-        if (string_column == nullptr)
-            throw Exception("Full-text arguments must be string columns", ErrorCodes::ILLEGAL_COLUMN);
-    }
-
-    const ColumnString * string_column = nullptr;
-    const ColumnNullable * nullable_column = nullptr;
-    bool string_is_constant = false;
-    bool nullable_is_constant = false;
+    const ColumnString * string_column;
+    const ColumnNullable * nullable_column;
+    bool is_constant;
 };
 
 bool decodeLocalMatchAgainstBooleanQuery(const IColumn & column, tipb::LocalMatchAgainstBooleanQuery & query)
@@ -1554,7 +1493,7 @@ public:
             stopword_lookup.emplace(stopword_collator);
         const auto * stopwords = stopword_lookup ? &*stopword_lookup : nullptr;
         CompiledBooleanQuery compiled_query = compileBooleanQuery(protocol_boolean_query, config, collator, stopwords);
-        if (compiled_query.matches_nothing)
+        if (compiled_query.clauses.empty())
         {
             finish_result();
             return;
@@ -1611,18 +1550,14 @@ public:
                         exact_scratch->nextRow();
                 resetClauseMatchStates(clause_states);
                 size_t matched_must_clauses = 0;
-                bool result_known = false;
-                bool row_matches = false;
+                auto row_result = ColumnMatchResult::Continue;
                 for (const auto & document_column : document_columns)
                 {
                     // A NULL MATCH column contributes no tokens. This is
                     // intentional: #70485 relies on a row with a NULL body
                     // still matching a required term from another MATCH column.
                     if (document_column.isNull(row))
-                    {
-                        analyzed_column.clear();
                         continue;
-                    }
                     const auto document = document_column.getString(row);
                     analyzeColumnInto(
                         document,
@@ -1679,7 +1614,6 @@ public:
                         }
                         return unfiltered_column;
                     };
-                    ColumnMatchResult match_result;
                     if constexpr (enable_index)
                     {
                         // STANDARD only emits valid UTF-8 BMP word tokens: malformed
@@ -1703,27 +1637,27 @@ public:
                             else
                                 ++work->linear_columns;
                         }
-                        match_result = indexed ? updateExactMatchStatesForColumn<count_work>(
-                                           compiled_query,
-                                           analyzed_column,
-                                           collator,
-                                           clause_states,
-                                           matched_must_clauses,
-                                           *exact_scratch,
-                                           work)
-                                               : updateBooleanMatchStatesForColumn(
-                                                   compiled_query,
-                                                   analyzed_column,
-                                                   get_unfiltered_column,
-                                                   collator,
-                                                   clause_states,
-                                                   matched_must_clauses);
+                        row_result = indexed ? updateExactMatchStatesForColumn<count_work>(
+                                         compiled_query,
+                                         analyzed_column,
+                                         collator,
+                                         clause_states,
+                                         matched_must_clauses,
+                                         *exact_scratch,
+                                         work)
+                                             : updateBooleanMatchStatesForColumn(
+                                                 compiled_query,
+                                                 analyzed_column,
+                                                 get_unfiltered_column,
+                                                 collator,
+                                                 clause_states,
+                                                 matched_must_clauses);
                     }
                     else
                     {
                         if constexpr (count_work)
                             ++work->linear_columns;
-                        match_result = updateBooleanMatchStatesForColumn(
+                        row_result = updateBooleanMatchStatesForColumn(
                             compiled_query,
                             analyzed_column,
                             get_unfiltered_column,
@@ -1731,20 +1665,22 @@ public:
                             clause_states,
                             matched_must_clauses);
                     }
-                    if (match_result == ColumnMatchResult::Rejected)
-                    {
-                        result_known = true;
+                    if (row_result != ColumnMatchResult::Continue)
                         break;
-                    }
-                    if (match_result == ColumnMatchResult::Accepted)
-                    {
-                        result_known = true;
-                        row_matches = true;
-                        break;
-                    }
                 }
-                output_data[row]
-                    = result_known ? (row_matches ? 1 : 0) : matchBooleanValue(compiled_query, clause_states);
+                if (row_result != ColumnMatchResult::Continue)
+                    output_data[row] = row_result == ColumnMatchResult::Accepted;
+                else if (compiled_query.must_clause_count != 0)
+                    output_data[row] = matched_must_clauses == compiled_query.must_clause_count;
+                else
+                {
+                    // A matched MUST NOT rejects immediately. With no MUST
+                    // clauses, any recorded match is therefore a SHOULD hit.
+                    output_data[row] = compiled_query.has_must_not
+                        && std::any_of(clause_states.begin(), clause_states.end(), [](const auto & state) {
+                                           return state.matched;
+                                       });
+                }
             }
         };
         if (route_terms && may_use_index)
