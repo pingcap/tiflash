@@ -401,7 +401,7 @@ StringRef JsonBinary::getObjectKey(size_t index) const
     size_t cursor = HEADER_SIZE + index * KEY_ENTRY_SIZE;
     auto key_offset = decodeNumeric<UInt32>(cursor, data);
     auto key_length = decodeNumeric<UInt16>(cursor, data);
-    return {data.data + key_offset, key_length};
+    return getSubRef(key_offset, key_length);
 }
 
 JsonBinary JsonBinary::getObjectValue(size_t index) const
@@ -423,7 +423,7 @@ JsonBinary JsonBinary::getValueEntry(size_t value_entry_offset) const
     case JsonBinary::TYPE_CODE_INT64:
     case JsonBinary::TYPE_CODE_UINT64:
     case JsonBinary::TYPE_CODE_FLOAT64:
-        return JsonBinary(entry_type, StringRef(data.data + value_offset, 8));
+        return JsonBinary(entry_type, getSubRef(value_offset, 8));
     case JsonBinary::TYPE_CODE_STRING:
     {
         cursor = value_offset;
