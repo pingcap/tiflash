@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/TiFlashSecurity.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/LogSearch.h>
 #include <Interpreters/Context.h>
@@ -35,11 +36,14 @@ using diagnosticspb::LogLevel;
 using diagnosticspb::SearchLogResponse;
 
 ::grpc::Status DiagnosticsService::server_info(
-    ::grpc::ServerContext *,
+    ::grpc::ServerContext * grpc_context,
     const ::diagnosticspb::ServerInfoRequest * request,
     ::diagnosticspb::ServerInfoResponse * response)
 try
 {
+    if (!context.getSecurityConfig()->checkGrpcContext(grpc_context))
+        return grpc::Status(grpc::StatusCode::PERMISSION_DENIED, "common name check is failed");
+
     if (context.getSharedContextDisagg()->isDisaggregatedComputeMode()
         && context.getSharedContextDisagg()->use_autoscaler)
     {
@@ -152,10 +156,13 @@ grpc::Status searchLog(
 }
 
 ::grpc::Status DiagnosticsService::search_log(
-    ::grpc::ServerContext *,
+    ::grpc::ServerContext * grpc_context,
     const ::diagnosticspb::SearchLogRequest * request,
     ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream)
 {
+    if (!context.getSecurityConfig()->checkGrpcContext(grpc_context))
+        return grpc::Status(grpc::StatusCode::PERMISSION_DENIED, "common name check is failed");
+
     int64_t start_time = request->start_time();
     int64_t end_time = request->end_time();
     if (end_time == 0)
