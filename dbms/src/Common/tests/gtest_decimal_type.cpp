@@ -116,5 +116,85 @@ TEST(DecimalType_test, ConvertToDecimal)
     ASSERT_EQ(d32_2.toString(2), "1234.57");
 }
 
+<<<<<<< HEAD
+=======
+TEST(DecimalType_test, ScaleMultiplierBounds)
+{
+    EXPECT_EQ(getScaleMultiplier<Decimal256>(0), Int256(1));
+    EXPECT_EQ(getScaleMultiplier<Decimal256>(decimal_max_prec), DecimalMaxValue::maxValue() + 1);
+    for (const ScaleType scale : {decimal_max_prec + 1, std::numeric_limits<ScaleType>::max()})
+    {
+        SCOPED_TRACE(scale);
+        EXPECT_THROW(DecimalMaxValue::get(scale), TiFlashException);
+        EXPECT_THROW(getScaleMultiplier<Decimal256>(scale), TiFlashException);
+    }
+}
+
+template <typename T>
+class DecimalToStringTest : public ::testing::Test
+{
+};
+
+using DecimalTypes = ::testing::Types<Decimal32, Decimal64, Decimal128, Decimal256>;
+TYPED_TEST_CASE(DecimalToStringTest, DecimalTypes);
+
+TYPED_TEST(DecimalToStringTest, PrecisionBoundary)
+{
+    using NativeType = typename TypeParam::NativeType;
+    constexpr auto precision = maxDecimalPrecision<TypeParam>();
+    const auto max_value = static_cast<NativeType>(DecimalMaxValue::get(precision));
+
+    for (ScaleType scale = 0; scale <= precision; ++scale)
+    {
+        SCOPED_TRACE(scale);
+        String expected(precision, '9');
+        if (scale > 0)
+            expected.insert(precision - scale, 1, '.');
+        if (scale == precision)
+            expected.insert(0, 1, '0');
+        EXPECT_EQ(TypeParam(max_value).toString(scale), expected);
+        EXPECT_EQ(TypeParam(static_cast<NativeType>(-max_value)).toString(scale), "-" + expected);
+
+        EXPECT_EQ(TypeParam(0).toString(scale), scale == 0 ? "0" : "0." + String(scale, '0'));
+        const String one = scale == 0 ? "1" : "0." + String(scale - 1, '0') + "1";
+        EXPECT_EQ(TypeParam(1).toString(scale), one);
+        EXPECT_EQ(TypeParam(-1).toString(scale), "-" + one);
+    }
+}
+
+TYPED_TEST(DecimalToStringTest, PrecisionOverflow)
+{
+    using NativeType = typename TypeParam::NativeType;
+    constexpr auto precision = maxDecimalPrecision<TypeParam>();
+    const auto overflow = static_cast<NativeType>(DecimalMaxValue::get(precision) + 1);
+    const std::vector<NativeType> values{
+        overflow,
+        static_cast<NativeType>(-overflow),
+        std::numeric_limits<NativeType>::max(),
+        std::numeric_limits<NativeType>::min()};
+
+    for (const auto & value : values)
+    {
+        for (ScaleType scale = 0; scale <= precision; ++scale)
+        {
+            SCOPED_TRACE(scale);
+            EXPECT_THROW(TypeParam(value).toString(scale), TiFlashException);
+        }
+    }
+}
+
+TYPED_TEST(DecimalToStringTest, InvalidScale)
+{
+    constexpr auto precision = maxDecimalPrecision<TypeParam>();
+    for (ScaleType scale : {precision + 1, decimal_max_prec + 5, std::numeric_limits<ScaleType>::max()})
+    {
+        SCOPED_TRACE(scale);
+        EXPECT_THROW(TypeParam(0).toString(scale), TiFlashException);
+        EXPECT_THROW(TypeParam(1).toString(scale), TiFlashException);
+        EXPECT_THROW(TypeParam(-1).toString(scale), TiFlashException);
+    }
+}
+
+>>>>>>> a24e0edee6 (fix: validate decimal scales, MPP routing, and string inputs (#11306))
 } // namespace tests
 } // namespace DB
