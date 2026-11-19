@@ -103,43 +103,11 @@ struct RestoreConfig
     size_t restore_partition_id;
 };
 
-enum class ProbePhaseState
-{
-    Active,
-    // All probe inputs are consumed, but the Join may still be scanning unmatched build rows or restoring data.
-    NormallyFinished,
-    // Post-probe processing is terminated early, for example by LIMIT, cancellation, or error cleanup.
-    Stopped,
-};
+class TaskStopSource;
+using TaskStopSourcePtr = std::shared_ptr<TaskStopSource>;
 
 class OneTimeNotifyFuture;
 using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
-
-class SharedQueue;
-using SharedQueuePtr = std::shared_ptr<SharedQueue>;
-
-// Shared by an original Join and all of its restore descendants. It only coordinates early stop; each Join keeps its
-// own build/probe completion counters and build_finished state.
-class ProbeStopContext
-{
-public:
-    bool isStopped() const { return stopped.load(std::memory_order_acquire); }
-
-private:
-    friend class Join;
-
-    void registerJoinWaitFutures(
-        const OneTimeNotifyFuturePtr & build_finished_future,
-        const OneTimeNotifyFuturePtr & probe_finished_future);
-    void addRestoreProbeQueue(const SharedQueuePtr & queue);
-    void stop();
-
-    std::atomic_bool stopped{false};
-    std::mutex mutex;
-    std::vector<OneTimeNotifyFuturePtr> wait_futures;
-    std::vector<SharedQueuePtr> restore_probe_queues;
-};
-using ProbeStopContextPtr = std::shared_ptr<ProbeStopContext>;
 
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
@@ -221,7 +189,7 @@ public:
         size_t probe_cache_column_threshold_,
         bool is_test,
         const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list,
-        const ProbeStopContextPtr & probe_stop_context_ = nullptr);
+        const TaskStopSourcePtr & probe_stop_source_ = nullptr);
 
     RestoreConfig restore_config;
 
@@ -327,7 +295,7 @@ public:
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
         pending_probe_streams = probe_concurrency;
-        probe_phase_state.store(ProbePhaseState::Active, std::memory_order_release);
+        probe_finished.store(false, std::memory_order_release);
     }
 
     void wakeUpAllWaitingThreads();
@@ -341,8 +309,7 @@ public:
     bool finishOneProbe(size_t stream_index);
     // Stop the shared probe phase without counting this stream as a normal input completion.
     void stopProbePhase();
-    // Register a restore-probe queue. A queue registered after the probe phase has stopped is cancelled immediately.
-    void addRestoreProbeQueue(const SharedQueuePtr & queue);
+    const TaskStopSourcePtr & getProbeStopSource() const { return probe_stop_source; }
     void finalizeProbe();
     void waitUntilAllProbeFinished() const;
     bool isProbeFinishedForPipeline() const;
@@ -436,10 +403,11 @@ private:
     size_t probe_concurrency;
     // Streams that have not finished probe input normally.
     size_t pending_probe_streams;
-    // Probe input completion is separate from Join completion: `NormallyFinished` may still be followed by post-probe
-    // work. `Stopped` overrides it when a pipeline task terminates before that work is done.
-    std::atomic<ProbePhaseState> probe_phase_state{ProbePhaseState::Active};
-    const ProbeStopContextPtr probe_stop_context;
+    // Normal input completion may be followed by unmatched-row scanning or restore work.
+    // Early stop never decrements pending_probe_streams or marks normal completion.
+    std::atomic_bool probe_finished{false};
+    // Shared by the original Join and its restore descendants, including their auxiliary tasks.
+    const TaskStopSourcePtr probe_stop_source;
 
     bool skip_wait = false;
     bool meet_error = false;

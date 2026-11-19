@@ -19,6 +19,8 @@
 #include <Operators/OperatorHelper.h>
 #include <common/logger_useful.h>
 
+#include <algorithm>
+
 namespace DB
 {
 namespace FailPoints
@@ -79,10 +81,12 @@ PipelineExec::PipelineExec(
     SourceOpPtr && source_op_,
     TransformOps && transform_ops_,
     SinkOpPtr && sink_op_,
-    bool has_pipeline_breaker_wait_time_)
+    bool has_pipeline_breaker_wait_time_,
+    PipelineInputStops input_stops_)
     : source_op(std::move(source_op_))
     , transform_ops(std::move(transform_ops_))
     , sink_op(std::move(sink_op_))
+    , input_stops(std::move(input_stops_))
     , has_pipeline_breaker_wait_time(has_pipeline_breaker_wait_time_)
 {
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_prefix_failpoint);
@@ -107,6 +111,7 @@ void PipelineExec::executePrefix()
 
 void PipelineExec::executeSuffix()
 {
+    applyInputStops();
     sink_op->operateSuffix();
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
         (*it)->operateSuffix();
@@ -120,6 +125,60 @@ void PipelineExec::notify()
     assert(waiting_for_notify);
     waiting_for_notify->notify();
     waiting_for_notify = nullptr;
+}
+
+TaskStopSources PipelineExec::getNotifyStopSources() const
+{
+    assert(waiting_for_notify);
+    TaskStopSources sources;
+    // Even a retained sink wait must wake once to stop abandoned operators and their auxiliary tasks.
+    // After applyInputStops(), it can wait for the resource again without being woken repeatedly by the stop.
+    for (const auto & stop : input_stops)
+        if (!stop.applied)
+            sources.push_back(stop.source);
+    return sources;
+}
+
+void PipelineExec::applyInputStops()
+{
+    const auto previous_boundary = stopped_input_boundary;
+    const bool previously_whole = whole_pipeline_stopped;
+    for (auto & stop : input_stops)
+    {
+        if (stop.applied || !stop.source->isStopped())
+            continue;
+        stop.applied = true;
+        if (!stop.first_required_transform)
+            whole_pipeline_stopped = true;
+        else
+            stopped_input_boundary = std::max(stopped_input_boundary.value_or(0), *stop.first_required_transform);
+    }
+    if (previously_whole || (previous_boundary == stopped_input_boundary && !whole_pipeline_stopped))
+        return;
+
+    // Stop only newly abandoned operators, from downstream to upstream. Do not run their suffix here:
+    // downstream output may still be waiting, and task finalization must remain the sole cleanup path.
+    if (whole_pipeline_stopped)
+        sink_op->onEarlyStop();
+    const size_t end = whole_pipeline_stopped ? transform_ops.size() : *stopped_input_boundary;
+    for (size_t i = end; i > previous_boundary.value_or(0); --i)
+        transform_ops[i - 1]->onEarlyStop();
+    if (!previous_boundary)
+        source_op->onEarlyStop();
+}
+
+bool PipelineExec::isOperatorStopped(const Operator * op) const
+{
+    if (whole_pipeline_stopped)
+        return true;
+    if (!stopped_input_boundary)
+        return false;
+    if (op == source_op.get())
+        return true;
+    for (size_t i = 0; i < *stopped_input_boundary; ++i)
+        if (op == transform_ops[i].get())
+            return true;
+    return false;
 }
 
 OperatorStatus PipelineExec::execute()
@@ -143,6 +202,10 @@ OperatorStatus PipelineExec::executeImpl()
     assert(!awaitable);
     assert(!io_op);
     assert(!waiting_for_notify);
+
+    applyInputStops();
+    if (whole_pipeline_stopped)
+        return OperatorStatus::FINISHED;
 
     Block block;
     size_t start_transform_op_index = 0;
@@ -173,13 +236,28 @@ OperatorStatus PipelineExec::fetchBlock(Block & block, size_t & start_transform_
 {
     auto op_status = sink_op->prepare();
     HANDLE_OP_STATUS(sink_op, op_status, OperatorStatus::NEED_INPUT);
+    // Drain the retained transforms first, then deliver EOF at the input boundary. In particular,
+    // a LIMIT stop must not discard its last output block or interrupt a downstream sink wait.
+    const auto boundary = stopped_input_boundary;
     for (int64_t index = transform_ops.size() - 1; index >= 0; --index)
     {
+        if (boundary && static_cast<size_t>(index) < *boundary)
+        {
+            block = {};
+            start_transform_op_index = *boundary;
+            return OperatorStatus::HAS_OUTPUT;
+        }
         const auto & transform_op = transform_ops[index];
         op_status = transform_op->tryOutput(block);
         // Once the transform op tryOutput has succeeded, execution will begin with the next transform op.
         start_transform_op_index = index + 1;
         HANDLE_OP_STATUS(transform_op, op_status, OperatorStatus::NEED_INPUT);
+    }
+    if (boundary)
+    {
+        block = {};
+        start_transform_op_index = *boundary;
+        return OperatorStatus::HAS_OUTPUT;
     }
     start_transform_op_index = 0;
     op_status = source_op->read(block);
@@ -201,6 +279,12 @@ OperatorStatus PipelineExec::executeIOImpl()
     assert(!waiting_for_notify);
     assert(!awaitable);
     assert(io_op);
+    applyInputStops();
+    if (isOperatorStopped(io_op))
+    {
+        io_op = nullptr;
+        return OperatorStatus::NEED_INPUT;
+    }
     auto op_status = io_op->executeIO();
     switch (op_status)
     {
@@ -235,6 +319,12 @@ OperatorStatus PipelineExec::awaitImpl()
     assert(!waiting_for_notify);
     assert(!io_op);
     assert(awaitable);
+    applyInputStops();
+    if (isOperatorStopped(awaitable))
+    {
+        awaitable = nullptr;
+        return OperatorStatus::NEED_INPUT;
+    }
     auto op_status = awaitable->await();
     switch (op_status)
     {
