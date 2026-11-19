@@ -76,7 +76,6 @@ struct FullTextToken
     String text;
     std::string_view source;
     size_t position = 0;
-    size_t code_points = 0;
 
     std::string_view value() const { return source.data() ? source : std::string_view{text}; }
 };
@@ -94,7 +93,7 @@ public:
 
     // This is per-token work. Keep it inline even when the surrounding
     // analyzer grows: outlining it penalizes the unfiltered/OFF stream too.
-    ALWAYS_INLINE void append(std::string_view text, size_t position, size_t code_points, bool borrow = false)
+    ALWAYS_INLINE void append(std::string_view text, size_t position, bool borrow = false)
     {
         if (used == tokens.size())
             tokens.emplace_back();
@@ -107,7 +106,6 @@ public:
             token.text.assign(text.data(), text.size());
         }
         token.position = position;
-        token.code_points = code_points;
     }
 
     template <typename Predicate>
@@ -156,7 +154,7 @@ struct BooleanClause
     std::vector<String> terms;
     std::vector<size_t> offsets;
     std::unique_ptr<BooleanClause> verification;
-    std::vector<std::unique_ptr<TiDB::ITiDBCollator::IPattern>> prefix_matchers;
+    std::unique_ptr<TiDB::ITiDBCollator::IPattern> prefix_matcher;
 };
 
 struct AnalyzerScratch
@@ -358,8 +356,8 @@ void scanStandardTokens(std::string_view text, Consumer && consume)
 void tokenizeTextInto(std::string_view text, FullTextColumn & result, const TiDB::TiDBCollatorPtr & collator = nullptr)
 {
     result.clear();
-    scanStandardTokens(text, [&](std::string_view token, size_t position, size_t code_points) {
-        result.append(token, position, code_points);
+    scanStandardTokens(text, [&](std::string_view token, size_t position, size_t) {
+        result.append(token, position);
         if (!collator)
             lowercaseTokenInPlace(result[result.size() - 1].text);
     });
@@ -576,7 +574,7 @@ void analyzeTextInto(
         if (code_points < min_token_size || code_points > max_token_size
             || (enable_stopword && isDefaultStopword(token, code_points, stopwords)))
             return;
-        result.append(token, position, code_points, borrow_document && collator);
+        result.append(token, position, borrow_document && collator);
         if (!collator)
             lowercaseTokenInPlace(result[result.size() - 1].text);
     });
@@ -651,7 +649,7 @@ void analyzeNgramTextInto(
             {
                 if (!enable_stopword || !containsNgramStopword(run, char_boundaries, 0, char_count, stopwords))
                 {
-                    result.append(run, base_position, char_count);
+                    result.append(run, base_position);
                     if (!collator)
                         lowercaseTokenInPlace(result[result.size() - 1].text);
                 }
@@ -680,11 +678,7 @@ void analyzeNgramTextInto(
         const auto append_gram = [&](size_t start) ALWAYS_INLINE {
             const size_t begin = char_boundaries[start];
             const size_t end = char_boundaries[start + ngram_token_size];
-            result.append(
-                run.substr(begin, end - begin),
-                base_position + start,
-                ngram_token_size,
-                borrow_document && collator);
+            result.append(run.substr(begin, end - begin), base_position + start, borrow_document && collator);
             if (!collator && preserve_case)
                 lowercaseTokenInPlace(result[result.size() - 1].text);
         };
@@ -795,14 +789,6 @@ std::unique_ptr<TiDB::ITiDBCollator::IPattern> compilePrefixMatcher(
     return matcher;
 }
 
-bool textStartsWith(std::string_view value, std::string_view prefix, const TiDB::TiDBCollatorPtr & collator)
-{
-    if (!collator)
-        return value.starts_with(prefix);
-    const auto matcher = compilePrefixMatcher(prefix, collator);
-    return matcher->match(value.data(), value.size());
-}
-
 // This call is per unmatched term/token, including small-query fallbacks.
 ALWAYS_INLINE bool matchesTermAt(
     const BooleanClause & clause,
@@ -813,9 +799,9 @@ ALWAYS_INLINE bool matchesTermAt(
     const auto value = token.value();
     if (!clause.prefix)
         return textEquals(value, clause.terms[term_index], collator);
-    if (collator && term_index < clause.prefix_matchers.size())
-        return clause.prefix_matchers[term_index]->match(value.data(), value.size());
-    return textStartsWith(value, clause.terms[term_index], collator);
+    if (clause.prefix_matcher)
+        return clause.prefix_matcher->match(value.data(), value.size());
+    return value.starts_with(clause.terms[term_index]);
 }
 
 struct ClauseMatchState
@@ -896,12 +882,6 @@ void resetClauseMatchStates(std::vector<ClauseMatchState> & states)
     }
 }
 
-struct BooleanMatchProgress
-{
-    size_t matched_must_clauses = 0;
-    bool matched_should_clause = false;
-};
-
 enum class ColumnMatchResult
 {
     Continue,
@@ -913,23 +893,20 @@ ALWAYS_INLINE ColumnMatchResult markClauseMatched(
     const CompiledBooleanQuery & query,
     size_t index,
     std::vector<ClauseMatchState> & states,
-    BooleanMatchProgress & progress)
+    size_t & matched_must_clauses)
 {
     states[index].matched = true;
     switch (query.clauses[index].modifier)
     {
     case BooleanClause::Modifier::Must:
-        ++progress.matched_must_clauses;
+        ++matched_must_clauses;
         break;
     case BooleanClause::Modifier::Should:
-        progress.matched_should_clause = true;
         break;
     case BooleanClause::Modifier::MustNot:
         return ColumnMatchResult::Rejected;
     }
-    if (!query.has_must_not
-        && (query.must_clause_count != 0 ? progress.matched_must_clauses == query.must_clause_count
-                                         : progress.matched_should_clause))
+    if (!query.has_must_not && matched_must_clauses == query.must_clause_count)
         return ColumnMatchResult::Accepted;
     return ColumnMatchResult::Continue;
 }
@@ -939,7 +916,7 @@ ALWAYS_INLINE ColumnMatchResult markTermMatched(
     size_t clause,
     size_t term,
     std::vector<ClauseMatchState> & states,
-    BooleanMatchProgress & progress)
+    size_t & matched_must_clauses)
 {
     auto & state = states[clause];
     if (state.matched || state.matched_terms[term])
@@ -949,7 +926,7 @@ ALWAYS_INLINE ColumnMatchResult markTermMatched(
     // A STANDARD SQL word may split into several terms: MUST intersects them,
     // while SHOULD/MUST NOT use their union. Both matchers share this rule.
     if (query.clauses[clause].modifier != BooleanClause::Modifier::Must || state.remaining_terms == 0)
-        return markClauseMatched(query, clause, states, progress);
+        return markClauseMatched(query, clause, states, matched_must_clauses);
     return ColumnMatchResult::Continue;
 }
 
@@ -960,7 +937,7 @@ ALWAYS_INLINE ColumnMatchResult updateBooleanMatchStatesForColumn(
     GetUnfilteredColumn && get_unfiltered_column,
     const TiDB::TiDBCollatorPtr & collator,
     std::vector<ClauseMatchState> & states,
-    BooleanMatchProgress & progress)
+    size_t & matched_must_clauses)
 {
     const auto & clauses = query.clauses;
     if (query.matches_nothing || clauses.empty())
@@ -1000,7 +977,7 @@ ALWAYS_INLINE ColumnMatchResult updateBooleanMatchStatesForColumn(
                             continue;
                         }
                     }
-                    const auto result = markClauseMatched(query, clause_index, states, progress);
+                    const auto result = markClauseMatched(query, clause_index, states, matched_must_clauses);
                     if (result != ColumnMatchResult::Continue)
                         return result;
                 }
@@ -1018,7 +995,7 @@ ALWAYS_INLINE ColumnMatchResult updateBooleanMatchStatesForColumn(
                 : state.remaining_terms < clause.terms.size();
             if (state.matched)
             {
-                const auto result = markClauseMatched(query, clause_index, states, progress);
+                const auto result = markClauseMatched(query, clause_index, states, matched_must_clauses);
                 if (result != ColumnMatchResult::Continue)
                     return result;
             }
@@ -1033,7 +1010,7 @@ ColumnMatchResult updateExactMatchStatesForColumn(
     const FullTextColumn & column,
     const TiDB::TiDBCollatorPtr & collator,
     std::vector<ClauseMatchState> & states,
-    BooleanMatchProgress & progress,
+    size_t & matched_must_clauses,
     ExactMatchScratch & scratch,
     LocalMatchAgainstTest::Work * work)
 {
@@ -1055,7 +1032,7 @@ ColumnMatchResult updateExactMatchStatesForColumn(
             if constexpr (count_work)
                 ++work->term_references;
             const auto & ref = route.references[i];
-            const auto result = markTermMatched(query, ref.clause, ref.term, states, progress);
+            const auto result = markTermMatched(query, ref.clause, ref.term, states, matched_must_clauses);
             // has_must_not prevents accepting before a later prohibited
             // association in this same bucket (e.g. +apple -APPLE).
             if (result != ColumnMatchResult::Continue)
@@ -1239,11 +1216,7 @@ CompiledBooleanQuery compileBooleanQuery(
         }
 
         if (clause.prefix && collator)
-        {
-            clause.prefix_matchers.reserve(clause.terms.size());
-            for (const auto & term : clause.terms)
-                clause.prefix_matchers.push_back(compilePrefixMatcher(term, collator));
-        }
+            clause.prefix_matcher = compilePrefixMatcher(clause.terms.front(), collator);
 
         if (!clause.terms.empty() || clause.modifier == BooleanClause::Modifier::Must)
             compiled.clauses.push_back(std::move(clause));
@@ -1637,7 +1610,7 @@ public:
                     if (exact_scratch)
                         exact_scratch->nextRow();
                 resetClauseMatchStates(clause_states);
-                BooleanMatchProgress match_progress;
+                size_t matched_must_clauses = 0;
                 bool result_known = false;
                 bool row_matches = false;
                 for (const auto & document_column : document_columns)
@@ -1735,7 +1708,7 @@ public:
                                            analyzed_column,
                                            collator,
                                            clause_states,
-                                           match_progress,
+                                           matched_must_clauses,
                                            *exact_scratch,
                                            work)
                                                : updateBooleanMatchStatesForColumn(
@@ -1744,7 +1717,7 @@ public:
                                                    get_unfiltered_column,
                                                    collator,
                                                    clause_states,
-                                                   match_progress);
+                                                   matched_must_clauses);
                     }
                     else
                     {
@@ -1756,7 +1729,7 @@ public:
                             get_unfiltered_column,
                             collator,
                             clause_states,
-                            match_progress);
+                            matched_must_clauses);
                     }
                     if (match_result == ColumnMatchResult::Rejected)
                     {
