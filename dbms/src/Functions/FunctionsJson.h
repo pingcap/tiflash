@@ -949,6 +949,7 @@ private:
                     else
                     {
                         const auto & data_from = sources[col]->getWhole();
+                        checkJsonBinaryNotEmpty(data_from.size);
                         jsons.emplace_back(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
                     }
                 }
@@ -956,6 +957,7 @@ private:
                 {
                     assert(sources[col]);
                     const auto & data_from = sources[col]->getWhole();
+                    checkJsonBinaryNotEmpty(data_from.size);
                     jsons.emplace_back(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
                 }
             }
@@ -1139,6 +1141,7 @@ private:
                     if (sources[col + 1] && !(value_nullmap && (*value_nullmap)[i]))
                     {
                         const auto & data_from = sources[col + 1]->getWhole();
+                        checkJsonBinaryNotEmpty(data_from.size);
                         value = JsonBinary(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
                     }
                 }
@@ -1146,6 +1149,7 @@ private:
                 {
                     assert(sources[col + 1]);
                     const auto & data_from = sources[col + 1]->getWhole();
+                    checkJsonBinaryNotEmpty(data_from.size);
                     value = JsonBinary(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
                 }
 
