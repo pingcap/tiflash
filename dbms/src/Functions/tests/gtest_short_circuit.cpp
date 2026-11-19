@@ -373,6 +373,49 @@ try
 }
 CATCH
 
+TEST_F(ShortCircuit, InvalidConstJsonPathShortCircuited)
+try
+{
+    for (const String function : {"jsonLength", "json_keys_2_args"})
+    {
+        // An invalid constant path makes plan-time constant folding fail with
+        // BAD_ARGUMENTS (not LOGICAL_ERROR), so the action survives and can be
+        // deferred; the all-false guard then shields it from execution.
+        {
+            Block input({
+                createColumn<UInt8>({0, 0}, "guard"),
+                createConstColumn<String>(2, R"({"a":1})", "doc"),
+                createConstColumn<String>(2, "$[", "path"),
+            });
+            ExpressionActions actions(input.getColumnsWithTypeAndName());
+            add(actions, function, {"doc", "path"}, "json_result");
+            add(actions, "isNotNull", {"json_result"}, "not_null");
+            add(actions, "and", {"guard", "not_null"}, "result");
+            actions.finalize({"result"});
+            // The JSON function and isNotNull defer; no constant-folded action counts.
+            ASSERT_EQ(lazyCount(actions), 2);
+            actions.execute(input);
+            ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 0}), input.getByName("result"));
+        }
+        // With an all-true guard the same expression still throws: the error is
+        // only deferred to the branch that actually executes.
+        {
+            Block input({
+                createColumn<UInt8>({1, 1}, "guard"),
+                createConstColumn<String>(2, R"({"a":1})", "doc"),
+                createConstColumn<String>(2, "$[", "path"),
+            });
+            ExpressionActions actions(input.getColumnsWithTypeAndName());
+            add(actions, function, {"doc", "path"}, "json_result");
+            add(actions, "isNotNull", {"json_result"}, "not_null");
+            add(actions, "and", {"guard", "not_null"}, "result");
+            actions.finalize({"result"});
+            ASSERT_THROW(actions.execute(input), Exception);
+        }
+    }
+}
+CATCH
+
 TEST_F(ShortCircuit, AllSelectedAndAllSkipped)
 {
     for (const UInt8 selected : {0, 1})
