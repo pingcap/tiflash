@@ -25,6 +25,9 @@ namespace DB
 class IParserBase : public IParser
 {
 public:
+    // Counts simultaneous parser calls, including expression precedence and other helper parsers.
+    static constexpr size_t maxParserDepth = 1024;
+
     bool parse(Pos & pos, ASTPtr & node, Expected & expected);
 
 protected:
