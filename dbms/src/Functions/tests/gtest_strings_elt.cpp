@@ -16,6 +16,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ext/range.h>
+#include <limits>
 
 namespace DB
 {
@@ -61,6 +62,38 @@ try
         createColumn<Nullable<Int64>>({0, -1, -2, -100, 3, 100}),
         dummy_col0,
         dummy_col1);
+}
+CATCH
+
+TEST_F(TestFunctionElt, UInt64BoundaryIdx)
+try
+{
+    constexpr UInt64 max_int64 = std::numeric_limits<Int64>::max();
+    constexpr UInt64 max_uint64 = std::numeric_limits<UInt64>::max();
+    constexpr size_t nrow = 7;
+    const auto arg1 = createConstColumn<String>(nrow, "abc");
+    const auto arg2 = createConstColumn<Nullable<String>>(nrow, "def");
+    const auto expected = createColumn<Nullable<String>>({{}, "abc", "def", {}, {}, {}, {}});
+
+    ASSERT_ELT(expected, createColumn<UInt64>({0, 1, 2, 3, max_int64, max_int64 + 1, max_uint64}), arg1, arg2);
+
+    ASSERT_ELT(
+        expected,
+        createColumn<Nullable<UInt64>>({0, 1, 2, 3, max_int64, max_int64 + 1, max_uint64}),
+        arg1,
+        arg2);
+
+    /// All-constant arguments are unwrapped and evaluated through the vector path.
+    for (const auto idx : {max_int64, max_int64 + 1, max_uint64})
+    {
+        ASSERT_ELT(createConstColumn<Nullable<String>>(nrow, {}), createConstColumn<UInt64>(nrow, idx), arg1, arg2);
+
+        ASSERT_ELT(
+            createConstColumn<Nullable<String>>(nrow, {}),
+            createConstColumn<Nullable<UInt64>>(nrow, idx),
+            arg1,
+            arg2);
+    }
 }
 CATCH
 
