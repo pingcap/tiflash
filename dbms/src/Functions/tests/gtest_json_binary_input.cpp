@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Schema/TiDBTypes.h>
 
 #include <vector>
 
@@ -70,6 +71,27 @@ public:
         ColumnsWithTypeAndName arguments{json};
         arguments.insert(arguments.end(), test_case.extra_arguments.begin(), test_case.extra_arguments.end());
         return executeFunction(test_case.function, arguments, nullptr, raw_function_test);
+    }
+
+    ColumnWithTypeAndName executeConstructor(
+        const String & function,
+        const ColumnWithTypeAndName & json,
+        bool raw_function_test = false)
+    {
+        ColumnsWithTypeAndName arguments;
+        if (function == "json_object")
+            arguments.push_back(createConstColumn<String>(json.column->size(), String{}));
+        arguments.push_back(json);
+        return executeFunction(function, arguments, nullptr, raw_function_test);
+    }
+
+    ColumnWithTypeAndName stringifyJson(const ColumnWithTypeAndName & json)
+    {
+        tipb::FieldType field_type;
+        field_type.set_flen(-1);
+        field_type.set_collate(TiDB::ITiDBCollator::BINARY);
+        field_type.set_tp(TiDB::TypeString);
+        return executeCastJsonAsStringFunction(json, field_type);
     }
 };
 
@@ -164,6 +186,76 @@ try
         ASSERT_EQ(constant_null.column->size(), rows);
         for (size_t row = 0; row < rows; ++row)
             EXPECT_TRUE((*constant_null.column)[row].isNull());
+    }
+}
+CATCH
+
+TEST_F(TestJsonBinaryInput, ConstructorsRejectEmptyInput)
+try
+{
+    const ColumnsWithTypeAndName inputs{
+        createColumn<String>({"", ""}),
+        createColumn<Nullable<String>>({String{}, String{}}),
+        createColumn<Nullable<String>>({{}, String{}}),
+        createColumn<String>({emptyJsonString(), String{}}),
+        createConstColumn<String>(rows, String{}),
+        createConstColumn<Nullable<String>>(rows, String{}),
+    };
+    for (const String function : {"json_array", "json_object"})
+    {
+        SCOPED_TRACE(function);
+        for (const bool raw_function_test : {false, true})
+        {
+            SCOPED_TRACE(raw_function_test);
+            for (size_t input_index = 0; input_index < inputs.size(); ++input_index)
+            {
+                SCOPED_TRACE(input_index);
+                try
+                {
+                    executeConstructor(function, inputs[input_index], raw_function_test);
+                    FAIL() << "Expected empty binary JSON input to be rejected";
+                }
+                catch (const Exception & e)
+                {
+                    EXPECT_EQ(e.code(), ErrorCodes::BAD_ARGUMENTS) << e.displayText();
+                }
+            }
+        }
+    }
+}
+CATCH
+
+TEST_F(TestJsonBinaryInput, ConstructorsPreserveEmptyStringAndNull)
+try
+{
+    const auto json = emptyJsonString();
+    const ColumnsWithTypeAndName inputs{
+        createColumn<String>({json, json}),
+        createColumn<Nullable<String>>({json, json}),
+        createColumn<Nullable<String>>({{}, json}),
+        createConstColumn<String>(rows, json),
+        createConstColumn<Nullable<String>>(rows, json),
+        createColumn<Nullable<String>>({{}, {}}),
+        createConstColumn<Nullable<String>>(rows, {}),
+        createOnlyNullColumn(rows),
+        createOnlyNullColumnConst(rows),
+    };
+    for (const String function : {"json_array", "json_object"})
+    {
+        SCOPED_TRACE(function);
+        const String empty_string_result = function == "json_array" ? R"([""])" : R"({"": ""})";
+        const String null_result = function == "json_array" ? "[null]" : R"({"": null})";
+        for (size_t input_index = 0; input_index < inputs.size(); ++input_index)
+        {
+            SCOPED_TRACE(input_index);
+            const auto & input = inputs[input_index];
+            const auto result = stringifyJson(executeConstructor(function, input));
+            ASSERT_EQ(result.column->size(), rows);
+            for (size_t row = 0; row < rows; ++row)
+                EXPECT_FIELD_EQ(
+                    (*result.column)[row],
+                    Field(input.column->isNullAt(row) ? null_result : empty_string_result));
+        }
     }
 }
 CATCH
