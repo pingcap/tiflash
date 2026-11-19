@@ -101,9 +101,17 @@ void SkipBytes(size_t & cursor, const String & raw_value)
     DecodeBytes(cursor, raw_value, ss);
 }
 
+static size_t decodeCompactBytesLength(size_t & cursor, const String & raw_value)
+{
+    const auto size = DecodeVarInt(cursor, raw_value);
+    if (unlikely(size < 0 || static_cast<UInt64>(size) > raw_value.size() - cursor))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong format, invalid length. (DecodeCompactBytes)");
+    return static_cast<size_t>(size);
+}
+
 String DecodeCompactBytes(size_t & cursor, const String & raw_value)
 {
-    size_t size = DecodeVarInt(cursor, raw_value);
+    const auto size = decodeCompactBytesLength(cursor, raw_value);
     String res(&raw_value[cursor], size);
     cursor += size;
     return res;
@@ -111,7 +119,7 @@ String DecodeCompactBytes(size_t & cursor, const String & raw_value)
 
 void SkipCompactBytes(size_t & cursor, const String & raw_value)
 {
-    size_t size = DecodeVarInt(cursor, raw_value);
+    const auto size = decodeCompactBytesLength(cursor, raw_value);
     cursor += size;
 }
 
@@ -354,21 +362,29 @@ void EncodeVectorFloat32(const Array & val, WriteBuffer & ss)
         writeFloatBinary(static_cast<Float32>(s.safeGet<NearestFieldType<Float32>::Type>()), ss);
 }
 
-void SkipVectorFloat32(size_t & cursor, const String & raw_value)
+static UInt32 decodeVectorFloat32Length(size_t & cursor, const String & raw_value)
 {
     RUNTIME_CHECK(boost::endian::order::native == boost::endian::order::little);
 
-    auto elements_n = readLittleEndian<UInt32>(&raw_value[cursor]);
-    auto size = sizeof(elements_n) + elements_n * sizeof(Float32);
-    cursor += size;
+    if (unlikely(cursor > raw_value.size() || raw_value.size() - cursor < sizeof(UInt32)))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong format, cursor over buffer size. (DecodeVectorFloat32)");
+
+    const auto n = readLittleEndian<UInt32>(&raw_value[cursor]);
+    cursor += sizeof(UInt32);
+    if (unlikely(n > (raw_value.size() - cursor) / sizeof(Float32)))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong format, invalid length. (DecodeVectorFloat32)");
+    return n;
+}
+
+void SkipVectorFloat32(size_t & cursor, const String & raw_value)
+{
+    const auto n = decodeVectorFloat32Length(cursor, raw_value);
+    cursor += n * sizeof(Float32);
 }
 
 Field DecodeVectorFloat32(size_t & cursor, const String & raw_value)
 {
-    RUNTIME_CHECK(boost::endian::order::native == boost::endian::order::little);
-
-    auto n = readLittleEndian<UInt32>(&raw_value[cursor]);
-    cursor += sizeof(UInt32);
+    const auto n = decodeVectorFloat32Length(cursor, raw_value);
 
     Array res;
     res.reserve(n);
