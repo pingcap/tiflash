@@ -527,6 +527,8 @@ impl CloudHelper {
         filter_conditions: Vec<tipb::Expr>,
         ann_query_info: tipb::AnnQueryInfo,
         fts_query_info: tipb::FtsQueryInfo,
+        timezone: tipb::DagRequest,
+        projector: Option<Arc<dyn kvengine::table::columnar::filter::TimestampProjector>>,
     ) -> Result<CloudColumnarReaders, Error> {
         let dfs = self.dfs.clone();
         let pd_client = self.pd_client.clone();
@@ -542,7 +544,9 @@ impl CloudHelper {
             filter_conditions,
             tables.len()
         );
-        let scan_ctx = TableScanCtx::new(table_scan, filter_conditions);
+        let scan_ctx = TableScanCtx::new(table_scan, filter_conditions)
+            .with_timezone(&timezone)
+            .with_timestamp_projector(projector);
         let (tx, rx) = tikv_util::mpsc::bounded(1);
         let start = Instant::now_coarse();
         let vector_index_cache = self.vector_index_cache.clone();
@@ -896,6 +900,7 @@ async fn request_snapshot_from_leader(
                     txn_chunk_manager,
                     ia_ctx,
                     prepare_type,
+                    prepare_on_caller: false,
                     read_columnar: true,
                     columnar_meta_cache: columnar_meta_cache.clone(),
                     encryption_key_manager: Arc::new(cloud_encryption::EncryptionKeyManager::new()),

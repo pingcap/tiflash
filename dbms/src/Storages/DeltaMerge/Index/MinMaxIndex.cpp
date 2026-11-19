@@ -15,6 +15,7 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/IColumn.h>
+#include <Common/MyTime.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
@@ -29,6 +30,9 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
+
+#include <string_view>
+
 namespace DB::DM
 {
 
@@ -227,6 +231,43 @@ std::pair<StringRef, StringRef> MinMaxIndex::getStringMinMax(size_t pack_index) 
 std::pair<UInt64, UInt64> MinMaxIndex::getUInt64MinMax(size_t pack_index) const
 {
     return {minmaxes->get64(pack_index * 2), minmaxes->get64(pack_index * 2 + 1)};
+}
+
+MinMaxIndexPtr MinMaxIndex::withTimezone(
+    size_t start_pack,
+    size_t pack_count,
+    const TimezoneInfo & timezone,
+    std::vector<UInt8> & converted) const
+{
+    auto column = minmaxes->cut(start_pack * 2, pack_count * 2)->assumeMutable();
+    auto * nullable = typeid_cast<ColumnNullable *>(column.get());
+    auto & data = static_cast<ColumnUInt64 &>(nullable ? nullable->getNestedColumn() : *column).getData();
+    const auto timezone_name = timezone.is_name_based ? std::string_view{timezone.timezone_name} : std::string_view{};
+    PaddedPODArray<UInt8> nulls;
+    PaddedPODArray<UInt8> values;
+    converted.assign(pack_count, false);
+    for (size_t i = 0; i < pack_count; ++i)
+    {
+        nulls.push_back(has_null_marks[start_pack + i]);
+        values.push_back(has_value_marks[start_pack + i]);
+        if (!values.back() || (nullable && nullable->isNullAt(i * 2)))
+            continue;
+        UInt64 session_min;
+        UInt64 session_max;
+        if (!projectTimestampRange(
+                timezone_name.data(),
+                timezone_name.size(),
+                timezone.timezone_offset,
+                data[i * 2],
+                data[i * 2 + 1],
+                &session_min,
+                &session_max))
+            continue;
+        data[i * 2] = session_min;
+        data[i * 2 + 1] = session_max;
+        converted[i] = true;
+    }
+    return std::make_shared<MinMaxIndex>(std::move(nulls), std::move(values), std::move(column));
 }
 
 template <typename T>
