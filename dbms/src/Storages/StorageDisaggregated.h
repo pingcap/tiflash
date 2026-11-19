@@ -105,8 +105,15 @@ private:
     std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> buildEstablishDisaggTaskReq(
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task);
+<<<<<<< HEAD
     DM::RSOperatorPtr buildRSOperator(const Context & db_context, const DM::ColumnDefinesPtr & columns_to_read);
     std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> packSegmentReadTasks(
+=======
+    std::tuple<DM::RSOperatorPtr, DM::ColumnRangePtr> buildRSOperatorAndColumnRange(
+        const Context & db_context,
+        const DM::ColumnDefinesPtr & columns_to_read);
+    std::tuple<std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr>, DM::ColumnDefinesPtr> packSegmentReadTasks(
+>>>>>>> a5e14033f8 (Fix three schema mismatch bugs under disaggregated arch  (#10530))
         const Context & db_context,
         DM::SegmentReadTasks && read_tasks,
         const DM::ColumnDefinesPtr & column_defines,
@@ -154,5 +161,12 @@ private:
     const FilterConditions & filter_conditions;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
+<<<<<<< HEAD
+=======
+    static constexpr auto ZONE_LABEL_KEY = "zone";
+    std::optional<String> zone_label;
+    // For generated column, just need a placeholder, and TiDB will fill this column.
+    std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
+>>>>>>> a5e14033f8 (Fix three schema mismatch bugs under disaggregated arch  (#10530))
 };
 } // namespace DB
