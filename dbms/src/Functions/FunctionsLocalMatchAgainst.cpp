@@ -590,21 +590,28 @@ FullTextColumn analyzeText(
     return result;
 }
 
+enum class NgramAnalysisMode
+{
+    Document,
+    Query,
+    Prefix,
+};
+
 void analyzeNgramTextInto(
     std::string_view text,
     FullTextColumn & result,
     AnalyzerScratch & scratch,
     size_t ngram_token_size,
-    const TiDB::TiDBCollatorPtr & collator = nullptr,
-    const BuiltinStopwordLookup * stopwords = nullptr,
-    bool enable_stopword = true,
-    bool borrow_document = false,
-    bool keep_short_runs = false)
+    const TiDB::TiDBCollatorPtr & collator,
+    const BuiltinStopwordLookup * stopwords,
+    bool enable_stopword,
+    NgramAnalysisMode mode)
 {
     result.clear();
     if (ngram_token_size == 0)
         return;
 
+    const bool borrow_tokens = mode == NgramAnalysisMode::Document && collator;
     const bool preserve_case = enable_stopword && stopwords;
     const size_t max_stopword_length = enable_stopword ? std::min(ngram_token_size, max_builtin_stopword_length) : 0;
     size_t next_position_base = 0;
@@ -642,7 +649,7 @@ void analyzeNgramTextInto(
         {
             // A Boolean query retains a short word for collation-aware
             // lookup. The document stream still has only fixed-size grams.
-            if (keep_short_runs)
+            if (mode == NgramAnalysisMode::Query)
             {
                 if (!enable_stopword || !containsNgramStopword(run, char_boundaries, stopwords))
                 {
@@ -675,7 +682,7 @@ void analyzeNgramTextInto(
         const auto append_gram = [&](size_t start) ALWAYS_INLINE {
             const size_t begin = char_boundaries[start];
             const size_t end = char_boundaries[start + ngram_token_size];
-            result.append(run.substr(begin, end - begin), base_position + start, borrow_document && collator);
+            result.append(run.substr(begin, end - begin), base_position + start, borrow_tokens);
             if (!collator && preserve_case)
                 lowercaseTokenInPlace(result[result.size() - 1].text);
         };
@@ -734,23 +741,14 @@ void analyzeNgramTextInto(
 FullTextColumn analyzeNgramText(
     std::string_view text,
     size_t ngram_token_size,
-    const TiDB::TiDBCollatorPtr & collator = nullptr,
-    const BuiltinStopwordLookup * stopwords = nullptr,
-    bool enable_stopword = true,
-    bool keep_short_runs = false)
+    const TiDB::TiDBCollatorPtr & collator,
+    const BuiltinStopwordLookup * stopwords,
+    bool enable_stopword,
+    NgramAnalysisMode mode)
 {
     FullTextColumn result;
     AnalyzerScratch scratch;
-    analyzeNgramTextInto(
-        text,
-        result,
-        scratch,
-        ngram_token_size,
-        collator,
-        stopwords,
-        enable_stopword,
-        false,
-        keep_short_runs);
+    analyzeNgramTextInto(text, result, scratch, ngram_token_size, collator, stopwords, enable_stopword, mode);
     return result;
 }
 
@@ -864,7 +862,15 @@ void analyzeColumnInto(
     bool enable_stopword = true)
 {
     if (use_ngram)
-        analyzeNgramTextInto(document, output, scratch, ngram_token_size, collator, stopwords, enable_stopword, true);
+        analyzeNgramTextInto(
+            document,
+            output,
+            scratch,
+            ngram_token_size,
+            collator,
+            stopwords,
+            enable_stopword,
+            NgramAnalysisMode::Document);
     else
         analyzeTextInto(document, output, collator, stopwords, min_token_size, max_token_size, enable_stopword, true);
 }
@@ -1048,7 +1054,13 @@ CompiledBooleanQuery compileBooleanQuery(
         return {};
     auto analyze_query = [&](std::string_view text) {
         if (config.use_ngram)
-            return analyzeNgramText(text, config.ngram_token_size, collator, stopwords, config.enable_stopword, true);
+            return analyzeNgramText(
+                text,
+                config.ngram_token_size,
+                collator,
+                stopwords,
+                config.enable_stopword,
+                NgramAnalysisMode::Query);
         return analyzeText(
             text,
             collator,
@@ -1087,11 +1099,15 @@ CompiledBooleanQuery compileBooleanQuery(
         }
         case tipb::LocalMatchAgainstBooleanTermType::LocalMatchAgainstBooleanTermPrefix:
         {
-            const auto terms = config.use_ngram
-                ? analyzeNgramText(node.text(), config.ngram_token_size, collator, stopwords, config.enable_stopword)
-                : tokenizeText(node.text(), collator);
             if (config.use_ngram)
             {
+                const auto terms = analyzeNgramText(
+                    node.text(),
+                    config.ngram_token_size,
+                    collator,
+                    stopwords,
+                    config.enable_stopword,
+                    NgramAnalysisMode::Prefix);
                 if (!terms.empty())
                 {
                     // TiDB expands an NGRAM prefix at least as long as one
@@ -1125,6 +1141,7 @@ CompiledBooleanQuery compileBooleanQuery(
                 continue;
             }
 
+            const auto terms = tokenizeText(node.text(), collator);
             clause.prefix = true;
             if (terms.size() != 1)
             {
@@ -1158,7 +1175,13 @@ CompiledBooleanQuery compileBooleanQuery(
         if (clause.phrase && !clause.terms.empty())
         {
             auto raw_terms = config.use_ngram
-                ? analyzeNgramText(node.text(), config.ngram_token_size, collator, nullptr, false, true)
+                ? analyzeNgramText(
+                    node.text(),
+                    config.ngram_token_size,
+                    collator,
+                    nullptr,
+                    false,
+                    NgramAnalysisMode::Query)
                 : analyzeText(node.text(), collator, nullptr, 0, std::numeric_limits<size_t>::max(), false);
             // InnoDB discards leading filtered tokens, but retains every
             // following word in the original phrase used for verification.
