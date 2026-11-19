@@ -16,6 +16,7 @@
 
 #include <atomic>
 #include <ostream>
+#include <string_view>
 
 namespace DB
 {
@@ -36,6 +37,7 @@ public:
 
     static std::string handleToDebugString(int64_t handle);
     static std::string keyToDebugString(const char * key, size_t size);
+    static std::string stringToDebugString(std::string_view raw);
 
     static std::string keyToHexString(const char * key, size_t size);
 
