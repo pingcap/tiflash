@@ -1193,6 +1193,61 @@ try
 }
 CATCH
 
+TEST_F(TestLocalMatchAgainst, MatchBooleanNgramShortWordsByCollation)
+try
+{
+    const String separator = "\u2063";
+    const String wrapped_four = separator + "4" + separator;
+    const String wrapped_twelve = separator + "12" + separator;
+    const auto documents = createColumn<String>(
+        {wrapped_four,
+         separator + "45" + separator,
+         separator + "14" + separator,
+         "4",
+         "45",
+         wrapped_twelve,
+         separator + "123" + separator},
+        "body");
+    const NamesAndTypes inputs{{"body", documents.type}};
+
+    for (const auto * collation : {"utf8mb4_bin", "utf8mb4_general_ci", "utf8mb4_unicode_ci", "utf8mb4_0900_ai_ci"})
+    {
+        const auto collator = TiDB::ITiDBCollator::getCollator(collation);
+        ASSERT_NE(nullptr, collator);
+        SCOPED_TRACE(collation);
+        const std::string_view name = collation;
+        const bool matches_short_word = name == "utf8mb4_unicode_ci" || name == "utf8mb4_0900_ai_ci";
+
+        auto query = makeRequiredLocalMatchQuery("4");
+        query.set_version(2);
+        query.set_parser(tipb::LocalMatchAgainstParserNgram);
+        query.set_ngram_token_size(2);
+        query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeDisabled);
+        std::vector<tipb::Expr> expressions;
+        expressions.push_back(makeLocalMatchDAGExpr("+4", query, inputs, collator->getCollatorId()));
+        auto * term = query.mutable_nodes(0);
+        term->set_term_type(tipb::LocalMatchAgainstBooleanTermPhrase);
+        expressions.push_back(makeLocalMatchDAGExpr("\"4\"", query, inputs, collator->getCollatorId()));
+        expressions.push_back(
+            makeLocalMatchDAGExpr("\"" + wrapped_four + "\"", query, inputs, collator->getCollatorId()));
+        term->set_text("12");
+        expressions.push_back(
+            makeLocalMatchDAGExpr("\"" + wrapped_twelve + "\"", query, inputs, collator->getCollatorId()));
+        term->set_text("4 12");
+        expressions.push_back(makeLocalMatchDAGExpr("\"4 12\"", query, inputs, collator->getCollatorId()));
+
+        const auto [actions, names] = buildLocalMatchDAGActions(*context, inputs, expressions);
+        Block block({documents});
+        actions->execute(block);
+        const Float64 hit = matches_short_word ? 1 : 0;
+        for (size_t i = 0; i < 3; ++i)
+            ASSERT_COLUMN_EQ(createColumn<Float64>({hit, hit, hit, 0, 0, 0, 0}), block.getByName(names[i]));
+        ASSERT_COLUMN_EQ(createColumn<Float64>({0, 0, 0, 0, 0, 1, 1}), block.getByName(names[3]));
+        ASSERT_COLUMN_EQ(createColumn<Float64>({0, 0, 0, 0, 0, 0, 0}), block.getByName(names[4]));
+    }
+}
+CATCH
+
 TEST_F(TestLocalMatchAgainst, MatchBooleanNgramStopwordSettings)
 try
 {

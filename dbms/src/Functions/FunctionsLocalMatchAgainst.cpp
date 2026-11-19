@@ -64,7 +64,8 @@ constexpr size_t default_ngram_token_size = 2;
 // never be reinterpreted with changed semantics.
 // Version 2 returns zero for NULL searches and uses MySQL's multibyte NGRAM
 // document scanner. STANDARD and the NGRAM Boolean lexer use BMP word
-// characters; filtered phrases also verify the unfiltered document stream.
+// characters. NGRAM queries retain short words for collation-aware matching.
+// Filtered phrases also verify the unfiltered document stream.
 constexpr UInt32 local_match_against_protocol_version = 2;
 
 struct FullTextToken
@@ -602,7 +603,8 @@ void analyzeNgramTextInto(
     const TiDB::TiDBCollatorPtr & collator = nullptr,
     const BuiltinStopwordLookup * stopwords = nullptr,
     bool enable_stopword = true,
-    bool borrow_document = false)
+    bool borrow_document = false,
+    bool keep_short_runs = false)
 {
     result.clear();
     if (ngram_token_size == 0)
@@ -643,7 +645,18 @@ void analyzeNgramTextInto(
         const size_t base_position = next_position_base;
         if (char_count < ngram_token_size)
         {
-            // A short document run emits no grams and contributes no position.
+            // A Boolean query retains a short word for collation-aware
+            // lookup. The document stream still has only fixed-size grams.
+            if (keep_short_runs)
+            {
+                if (!enable_stopword || !containsNgramStopword(run, char_boundaries, 0, char_count, stopwords))
+                {
+                    result.append(run, base_position, char_count);
+                    if (!collator)
+                        lowercaseTokenInPlace(result[result.size() - 1].text);
+                }
+                ++next_position_base;
+            }
             continue;
         }
 
@@ -732,11 +745,21 @@ FullTextColumn analyzeNgramText(
     size_t ngram_token_size,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
     const BuiltinStopwordLookup * stopwords = nullptr,
-    bool enable_stopword = true)
+    bool enable_stopword = true,
+    bool keep_short_runs = false)
 {
     FullTextColumn result;
     AnalyzerScratch scratch;
-    analyzeNgramTextInto(text, result, scratch, ngram_token_size, collator, stopwords, enable_stopword);
+    analyzeNgramTextInto(
+        text,
+        result,
+        scratch,
+        ngram_token_size,
+        collator,
+        stopwords,
+        enable_stopword,
+        false,
+        keep_short_runs);
     return result;
 }
 
@@ -1087,15 +1110,15 @@ CompiledBooleanQuery compileBooleanQuery(
         return compiled;
     }
     auto analyze_query = [&](std::string_view text) {
-        return config.use_ngram
-            ? analyzeNgramText(text, config.ngram_token_size, collator, stopwords, config.enable_stopword)
-            : analyzeText(
-                text,
-                collator,
-                stopwords,
-                config.min_token_size,
-                config.max_token_size,
-                config.enable_stopword);
+        if (config.use_ngram)
+            return analyzeNgramText(text, config.ngram_token_size, collator, stopwords, config.enable_stopword, true);
+        return analyzeText(
+            text,
+            collator,
+            stopwords,
+            config.min_token_size,
+            config.max_token_size,
+            config.enable_stopword);
     };
     for (const auto & node : query.nodes())
     {
@@ -1188,28 +1211,6 @@ CompiledBooleanQuery compileBooleanQuery(
         {
             clause.phrase = true;
             const auto terms = analyze_query(node.text());
-            if (config.use_ngram)
-            {
-                const auto words = tokenizeText(node.text(), collator);
-                bool seen_indexed_word = false;
-                if (std::any_of(words.begin(), words.end(), [&](const auto & word) {
-                        if (word.code_points >= config.ngram_token_size)
-                        {
-                            seen_indexed_word = seen_indexed_word || !analyze_query(word.text).empty();
-                            return false;
-                        }
-                        if (!config.enable_stopword || seen_indexed_word)
-                            return true;
-                        std::vector<size_t> boundaries{0};
-                        for (size_t offset = 0; offset < word.text.size();)
-                        {
-                            offset += decodeCodePoint(word.text, offset).second;
-                            boundaries.push_back(offset);
-                        }
-                        return !containsNgramStopword(word.text, boundaries, 0, word.code_points, stopwords);
-                    }))
-                    break; // A short query unigram cannot occur in the document's fixed-size ngrams.
-            }
             first_query_position = collectClauseTerms(clause, terms);
             break;
         }
@@ -1220,7 +1221,7 @@ CompiledBooleanQuery compileBooleanQuery(
         if (clause.phrase && !clause.terms.empty())
         {
             auto raw_terms = config.use_ngram
-                ? analyzeNgramText(node.text(), config.ngram_token_size, collator, nullptr, false)
+                ? analyzeNgramText(node.text(), config.ngram_token_size, collator, nullptr, false, true)
                 : analyzeText(node.text(), collator, nullptr, 0, std::numeric_limits<size_t>::max(), false);
             // InnoDB discards leading filtered tokens, but retains every
             // following word in the original phrase used for verification.
