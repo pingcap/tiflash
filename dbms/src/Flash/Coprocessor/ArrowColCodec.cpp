@@ -31,6 +31,9 @@
 #include <IO/copyData.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
+#include <common/unaligned.h>
+
+#include <limits>
 
 namespace DB
 {
@@ -39,6 +42,7 @@ using TiDB::ColumnInfo;
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
+extern const int INCORRECT_DATA;
 extern const int UNKNOWN_EXCEPTION;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
@@ -619,9 +623,12 @@ const char * arrowEnumColToFlashCol(
     {
         if (checkNull(i, null_count, null_bitmap, col))
             continue;
-        const auto enum_value
-            = static_cast<Int64>(toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos + offsets[i]))));
-        col.column->assumeMutable()->insert(Field(enum_value));
+        if (unlikely(offsets[i + 1] - offsets[i] < sizeof(UInt64)))
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk enum value is truncated");
+        const auto enum_value = toLittleEndian(unalignedLoad<UInt64>(pos + offsets[i]));
+        if (unlikely(enum_value > static_cast<UInt64>(std::numeric_limits<Int16>::max())))
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk enum value is out of range");
+        col.column->assumeMutable()->insert(Field(static_cast<Int64>(enum_value)));
     }
     return pos + offsets[length];
 }
@@ -709,6 +716,10 @@ const char * arrowDecimalColToFlashCol(
         pos += 1;
         UInt8 digits_frac = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
         pos += 1;
+        const auto word_count = (digits_int + DIGITS_PER_WORD - 1) / DIGITS_PER_WORD
+            + (digits_frac + DIGITS_PER_WORD - 1) / DIGITS_PER_WORD;
+        if (unlikely(word_count > MAX_WORD_BUF_LEN))
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk decimal digits exceed its word buffer");
         //UInt8 result_frac = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
         pos += 1;
         UInt8 negative = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
