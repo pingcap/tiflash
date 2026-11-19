@@ -619,5 +619,46 @@ TEST_F(RegexpReplace, RegexpReplaceTest)
                 true));
     }
 }
+
+TEST_F(RegexpReplace, InvalidUTF8Position)
+{
+    const std::vector<String> subjects{
+        "\xE0\xC3\xC3",
+        "\xE0\xC3",
+        "\xE0\xC3\xC3"
+        "a",
+        "\xE0\xC3"
+        "a",
+    };
+    const std::vector<Int64> positions{3, 2, 4, 3};
+    const std::vector<String> results{"\xE0\xC3\xC3", "\xE0\xC3", "\xE0\xC3\xC3x", "\xE0\xC3x"};
+    // Cover both replaceAllImpl and replaceOneImpl.
+    for (Int64 occurrence : {0, 1})
+    {
+        SCOPED_TRACE(occurrence);
+        for (size_t i = 0; i < subjects.size(); ++i)
+        {
+            SCOPED_TRACE(i);
+            ASSERT_COLUMN_EQ(
+                createConstColumn<String>(1, results[i]),
+                executeFunction(
+                    "regexp_replace",
+                    createConstColumn<String>(1, subjects[i]),
+                    createConstColumn<String>(1, "a"),
+                    createConstColumn<String>(1, "x"),
+                    createConstColumn<Int64>(1, positions[i]),
+                    createConstColumn<Int64>(1, occurrence)));
+        }
+        ASSERT_COLUMN_EQ(
+            createColumn<String>(results),
+            executeFunction(
+                "regexp_replace",
+                createColumn<String>(subjects),
+                createConstColumn<String>(subjects.size(), "a"),
+                createConstColumn<String>(subjects.size(), "x"),
+                createColumn<Int64>(positions),
+                createConstColumn<Int64>(subjects.size(), occurrence)));
+    }
+}
 } // namespace tests
 } // namespace DB
