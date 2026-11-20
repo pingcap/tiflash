@@ -1043,15 +1043,60 @@ ColumnMatchResult updateExactMatchStatesForColumn(
     return ColumnMatchResult::Continue;
 }
 
+struct MatchCollation
+{
+    explicit MatchCollation(TiDB::TiDBCollatorPtr collator_ = nullptr)
+        : collator(collator_)
+    {
+        if (!collator)
+            return;
+
+        using Type = TiDB::ITiDBCollator::CollatorType;
+        switch (collator->getCollatorType())
+        {
+        case Type::UTF8MB4_BIN:
+        case Type::UTF8_BIN:
+        case Type::LATIN1_BIN:
+        case Type::ASCII_BIN:
+        case Type::BINARY:
+        case Type::UTF8MB4_0900_BIN:
+        case Type::UTF8_GENERAL_CI:
+        case Type::UTF8MB4_GENERAL_CI:
+            // Binary compares bytes and General CI compares one weight per
+            // code point. Their padding rules trim ASCII spaces, which split
+            // NGRAM runs.
+            requires_equal_code_point_count = true;
+            [[fallthrough]];
+        case Type::UTF8_UNICODE_CI:
+        case Type::UTF8MB4_UNICODE_CI:
+        case Type::UTF8MB4_0900_AI_CI:
+            // Compare and sortKey use the same weights and padding rules.
+            supports_exact_route = true;
+            break;
+        default:
+            break;
+        }
+    }
+
+    TiDB::TiDBCollatorPtr collator;
+    bool requires_equal_code_point_count = false;
+    bool supports_exact_route = false;
+};
+
 CompiledBooleanQuery compileBooleanQuery(
     const tipb::LocalMatchAgainstBooleanQuery & query,
     const LocalMatchAnalyzerConfig & config,
-    const TiDB::TiDBCollatorPtr & collator = nullptr,
-    const BuiltinStopwordLookup * stopwords = nullptr)
+    const MatchCollation & match_collation,
+    const BuiltinStopwordLookup * stopwords)
 {
     CompiledBooleanQuery compiled;
     if (!config.use_ngram && (config.max_token_size == 0 || config.min_token_size > config.max_token_size))
         return {};
+    const auto & collator = match_collation.collator;
+    const bool reject_short_ngrams = config.use_ngram && match_collation.requires_equal_code_point_count;
+    const auto is_short_ngram = [size = config.ngram_token_size](std::string_view token) {
+        return UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(token.data()), token.size()) < size;
+    };
     auto analyze_query = [&](std::string_view text) {
         if (config.use_ngram)
             return analyzeNgramText(
@@ -1172,6 +1217,16 @@ CompiledBooleanQuery compileBooleanQuery(
             throw Exception("Invalid Local MATCH Boolean node term type", ErrorCodes::ILLEGAL_COLUMN);
         }
 
+        // A short exact term makes the entire phrase impossible. Removing the
+        // term alone would change which phrases can match. Prefixes use LIKE.
+        const bool check_short_ngrams = reject_short_ngrams && clause.phrase
+            && node.term_type() != tipb::LocalMatchAgainstBooleanTermType::LocalMatchAgainstBooleanTermPrefix;
+        if (check_short_ngrams && std::any_of(clause.terms.begin(), clause.terms.end(), is_short_ngram))
+        {
+            clause.terms.clear();
+            clause.offsets.clear();
+        }
+
         if (clause.phrase && !clause.terms.empty())
         {
             auto raw_terms = config.use_ngram
@@ -1188,13 +1243,23 @@ CompiledBooleanQuery compileBooleanQuery(
             raw_terms.filterInPlace([&](const auto & token) { return token.position >= first_query_position; });
             if (raw_terms.size() != clause.terms.size())
             {
-                // InnoDB verifies phrases against the original document, not
-                // just the index tokens: removing "the" must not turn it into
-                // an arbitrary positional gap. Ordinary terms/prefixes do not
-                // pay for this additional document stream.
-                clause.verification = std::make_unique<BooleanClause>();
-                clause.verification->phrase = true;
-                collectClauseTerms(*clause.verification, raw_terms);
+                // Verification requires an unfiltered document gram for each
+                // remaining token, including stopwords in the phrase.
+                if (check_short_ngrams && std::any_of(raw_terms.begin(), raw_terms.end(), [&](const auto & token) {
+                        return is_short_ngram(token.value());
+                    }))
+                {
+                    clause.terms.clear();
+                    clause.offsets.clear();
+                }
+                else
+                {
+                    // Check the original document so a filtered word cannot
+                    // be replaced by an arbitrary positional gap.
+                    clause.verification = std::make_unique<BooleanClause>();
+                    clause.verification->phrase = true;
+                    collectClauseTerms(*clause.verification, raw_terms);
+                }
             }
         }
 
@@ -1234,35 +1299,13 @@ CompiledBooleanQuery compileBooleanQuery(
 size_t eligibleExactRouteTermCount(
     const CompiledBooleanQuery & query,
     const LocalMatchAnalyzerConfig & config,
-    const TiDB::TiDBCollatorPtr & collator,
+    const MatchCollation & match_collation,
     LocalMatchAgainstTest::Matcher matcher,
     size_t min_terms,
     size_t budget)
 {
-    if (matcher == LocalMatchAgainstTest::Matcher::Linear || config.use_ngram || !collator)
+    if (matcher == LocalMatchAgainstTest::Matcher::Linear || config.use_ngram || !match_collation.supports_exact_route)
         return {};
-    // Compare and sortKey in these implementations encode the same weight
-    // stream and use identical PAD/NO PAD preprocessing. GeneralCI emits one
-    // 16-bit weight per rune; UCA emits the same expansion/ignorable-weight
-    // stream consumed by compare. Binary keys preserve byte equality.
-    using Type = TiDB::ITiDBCollator::CollatorType;
-    switch (collator->getCollatorType())
-    {
-    case Type::UTF8_GENERAL_CI:
-    case Type::UTF8MB4_GENERAL_CI:
-    case Type::UTF8_UNICODE_CI:
-    case Type::UTF8MB4_UNICODE_CI:
-    case Type::UTF8MB4_0900_AI_CI:
-    case Type::UTF8MB4_BIN:
-    case Type::UTF8_BIN:
-    case Type::UTF8MB4_0900_BIN:
-    case Type::BINARY:
-    case Type::LATIN1_BIN:
-    case Type::ASCII_BIN:
-        break;
-    default:
-        return {};
-    }
 
     size_t terms = 0;
     // UCA may resize a document key buffer to 16 bytes per input byte;
@@ -1428,7 +1471,7 @@ public:
     // IFunction NULL wrapper must not short-circuit the whole expression.
     bool useDefaultImplementationForNulls() const override { return false; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
+    void setCollator(const TiDB::TiDBCollatorPtr & collator) override { match_collation = MatchCollation(collator); }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1515,7 +1558,9 @@ public:
         if (enable_stopword)
             stopword_lookup.emplace(stopword_collator);
         const auto * stopwords = stopword_lookup ? &*stopword_lookup : nullptr;
-        CompiledBooleanQuery compiled_query = compileBooleanQuery(protocol_boolean_query, config, collator, stopwords);
+        const auto & collator = match_collation.collator;
+        CompiledBooleanQuery compiled_query
+            = compileBooleanQuery(protocol_boolean_query, config, match_collation, stopwords);
         if (compiled_query.clauses.empty())
         {
             finish_result();
@@ -1528,7 +1573,7 @@ public:
         const bool large_block = rows >= exact_route_large_block_min_rows;
         const size_t min_route_terms = large_block ? exact_route_min_terms_large_block : exact_route_min_terms;
         const size_t route_terms
-            = eligibleExactRouteTermCount(compiled_query, config, collator, matcher, min_route_terms, budget);
+            = eligibleExactRouteTermCount(compiled_query, config, match_collation, matcher, min_route_terms, budget);
         const size_t min_route_tokens = large_block ? exact_route_min_tokens_large_block : exact_route_min_tokens;
         bool may_use_index = matcher == LocalMatchAgainstTest::Matcher::Indexed;
         if (route_terms && !may_use_index)
@@ -1714,7 +1759,7 @@ public:
     }
 
 private:
-    TiDB::TiDBCollatorPtr collator = nullptr;
+    MatchCollation match_collation;
     LocalMatchAgainstTest::Matcher matcher;
     LocalMatchAgainstTest::Work * work;
     size_t budget;
