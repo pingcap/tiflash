@@ -2306,7 +2306,7 @@ void checkPreparedDecimalComparisons()
         }
         auto deleted_column = make_column({"100.00"});
         auto del_mark = ColumnUInt8::create();
-        del_mark->insertValue(1);
+        del_mark->getData().push_back(1);
         index.addPack(*deleted_column, del_mark.get());
         if (nullable)
         {
@@ -2483,7 +2483,7 @@ void checkPreparedDecimalOverflow()
     {
         const Field value(getDecimalField<T>(negative ? "-" + tiny : tiny, precision, scale));
         EXPECT_EQ(
-            integer_index->checkCmp<RoughCheck::CheckEqual>(0, 5, value, integer_type),
+            integer_index->template checkCmp<RoughCheck::CheckEqual>(0, 5, value, integer_type),
             RSResults(5, RSResult::None));
         const RSResults expected{
             RSResult::None,
@@ -2491,8 +2491,8 @@ void checkPreparedDecimalOverflow()
             negative ? RSResult::All : RSResult::None,
             RSResult::All,
             RSResult::All};
-        EXPECT_EQ(integer_index->checkCmp<RoughCheck::CheckGreater>(0, 5, value, integer_type), expected);
-        EXPECT_EQ(integer_index->checkCmp<RoughCheck::CheckGreaterEqual>(0, 5, value, integer_type), expected);
+        EXPECT_EQ(integer_index->template checkCmp<RoughCheck::CheckGreater>(0, 5, value, integer_type), expected);
+        EXPECT_EQ(integer_index->template checkCmp<RoughCheck::CheckGreaterEqual>(0, 5, value, integer_type), expected);
     }
 
     // The constant overflows during its one-time alignment to the column's scale.
@@ -2502,11 +2502,15 @@ void checkPreparedDecimalOverflow()
     {
         const Field value(getDecimalField<T>(negative ? "-" + maximum : maximum, precision, 0));
         EXPECT_EQ(
-            fractional_index->checkCmp<RoughCheck::CheckEqual>(0, 3, value, fractional_type),
+            fractional_index->template checkCmp<RoughCheck::CheckEqual>(0, 3, value, fractional_type),
             RSResults(3, RSResult::None));
         const RSResults expected(3, negative ? RSResult::All : RSResult::None);
-        EXPECT_EQ(fractional_index->checkCmp<RoughCheck::CheckGreater>(0, 3, value, fractional_type), expected);
-        EXPECT_EQ(fractional_index->checkCmp<RoughCheck::CheckGreaterEqual>(0, 3, value, fractional_type), expected);
+        EXPECT_EQ(
+            fractional_index->template checkCmp<RoughCheck::CheckGreater>(0, 3, value, fractional_type),
+            expected);
+        EXPECT_EQ(
+            fractional_index->template checkCmp<RoughCheck::CheckGreaterEqual>(0, 3, value, fractional_type),
+            expected);
     }
 }
 } // namespace
