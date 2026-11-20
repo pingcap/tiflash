@@ -2361,7 +2361,7 @@ void checkPreparedDecimalComparisons()
              {RSResult::None, RSResult::None, RSResult::All}},
             {"-4.001",
              3,
-             {RSResult::None, RSResult::None, RSResult::None},
+             {RSResult::Some, RSResult::None, RSResult::None},
              {RSResult::Some, RSResult::All, RSResult::All},
              {RSResult::Some, RSResult::All, RSResult::All}},
             {"-4.01",
@@ -2414,6 +2414,45 @@ void checkPreparedDecimalComparisons()
         EXPECT_EQ(
             index.checkCmp<RoughCheck::CheckEqual>(0, index.size(), Field(Int64(4)), type),
             expected_results({RSResult::Some, RSResult::Some, RSResult::Some}));
+
+        MinMaxIndex singleton_index(*type);
+        singleton_index.addPack(*deleted_column, nullptr); // Ignore this prefix pack in the checks below.
+        for (const auto & value : {"4.00", "5.00", "4.00"})
+        {
+            auto column = make_column({value});
+            if (nullable)
+                column->insertDefault();
+            singleton_index.addPack(*column, nullptr);
+        }
+        singleton_index.addPack(*deleted_column, del_mark.get());
+        if (nullable)
+        {
+            auto null_column = type->createColumn();
+            null_column->insertDefault();
+            singleton_index.addPack(*null_column, nullptr);
+        }
+
+        const Field four(getDecimalField<LiteralDecimal>("4", maxDecimalPrecision<LiteralDecimal>(), 0));
+        const Field five(getDecimalField<LiteralDecimal>("5", maxDecimalPrecision<LiteralDecimal>(), 0));
+        // Preparing this unused literal would throw, so it detects a missing early exit.
+        const Field invalid_scale(
+            DecimalField<LiteralDecimal>(LiteralDecimal(1), maxDecimalPrecision<Decimal256>() + 1));
+        const auto all_results = expected_results({RSResult::All, RSResult::All, RSResult::All});
+        for (const auto & values : std::vector<std::vector<Field>>{
+                 {four, Field{}, five, invalid_scale},
+                 {five, four, Field{}, invalid_scale}})
+        {
+            EXPECT_EQ(singleton_index.checkIn(1, singleton_index.size() - 1, values, type), all_results);
+        }
+        EXPECT_EQ(singleton_index.checkIn(1, 1, {four, invalid_scale}, type), RSResults{all_results.front()});
+        EXPECT_EQ(
+            singleton_index.checkIn(1, singleton_index.size() - 1, {four, Field{}}, type),
+            expected_results({RSResult::All, RSResult::NoneNull, RSResult::All}));
+        EXPECT_THROW(singleton_index.checkIn(1, 3, {four, invalid_scale}, type), Exception);
+        EXPECT_EQ(
+            singleton_index.checkIn(4, singleton_index.size() - 4, {invalid_scale}, type),
+            RSResults(all_results.begin() + 3, all_results.end()));
+        EXPECT_EQ(singleton_index.checkIn(1, 0, {invalid_scale}, type), RSResults{});
     }
 }
 

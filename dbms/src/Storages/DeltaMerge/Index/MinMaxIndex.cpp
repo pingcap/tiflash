@@ -299,28 +299,40 @@ RSResults MinMaxIndex::checkDecimalInImpl(
 {
     RSResults results(pack_count, RSResult::None);
     const auto & minmaxes_data = details::minMaxColumnData<T>(column);
+    std::vector<size_t> active_packs;
+    active_packs.reserve(pack_count);
+    for (size_t i = start_pack; i < start_pack + pack_count; ++i)
+    {
+        if (is_valid_pack(i))
+            active_packs.push_back(i);
+    }
     bool has_null_value = false;
     // Visit constants first so their type dispatch and scale alignment are outside the pack loop.
     for (const auto & value : values)
     {
+        if (active_packs.empty())
+            break;
         if (value.isNull())
         {
             has_null_value = true;
             continue;
         }
         details::withPreparedDecimalComparison<T>(value, type, [&](const auto & comparison) {
-            for (size_t i = start_pack; i < start_pack + pack_count; ++i)
+            size_t remaining_count = 0;
+            for (const auto i : active_packs)
             {
                 auto & result = results[i - start_pack];
-                if (!is_valid_pack(i) || result == RSResult::All)
-                    continue;
                 result = result
                     || RoughCheck::CheckEqual::check<T>(
                              comparison,
                              type,
                              minmaxes_data[i * 2],
                              minmaxes_data[i * 2 + 1]);
+                if (!result.allMatch())
+                    active_packs[remaining_count++] = i;
             }
+            // Completed packs no longer need comparisons with subsequent literals.
+            active_packs.resize(remaining_count);
         });
     }
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
