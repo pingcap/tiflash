@@ -27,8 +27,7 @@ namespace RoughCheck
 template <template <typename, typename> class Op>
 using Cmp = ValueComparision<Op>;
 
-#define IS_LEGAL(lef_field, right_value) \
-    (Cmp<EqualsOp>::compare(lef_field, type, right_value) != ValueCompareResult::CanNotCompare)
+#define IS_LEGAL(lef_field, right_value) (Cmp<EqualsOp>::isLegal(lef_field, type, right_value))
 #define EQUAL(lef_field, right_value) (Cmp<EqualsOp>::compare(lef_field, type, right_value) == ValueCompareResult::True)
 #define LESS(lef_field, right_value) (Cmp<LessOp>::compare(lef_field, type, right_value) == ValueCompareResult::True)
 #define GREATER(lef_field, right_value) \
@@ -41,8 +40,8 @@ using Cmp = ValueComparision<Op>;
 
 struct CheckEqual
 {
-    template <typename T>
-    static RSResult check(const Field & v, const DataTypePtr & type, const T & min, const T & max)
+    template <typename T, typename Value>
+    static RSResult check(const Value & v, const DataTypePtr & type, const T & min, const T & max)
     {
         if (!IS_LEGAL(v, min))
             return RSResult::Some;
@@ -85,8 +84,8 @@ struct CheckIn
 
 struct CheckGreater
 {
-    template <typename T>
-    static RSResult check(const Field & v, const DataTypePtr & type, const T & min, const T & max)
+    template <typename T, typename Value>
+    static RSResult check(const Value & v, const DataTypePtr & type, const T & min, const T & max)
     {
         if (!IS_LEGAL(v, min))
             return RSResult::Some;
@@ -108,8 +107,8 @@ struct CheckGreater
 
 struct CheckGreaterEqual
 {
-    template <typename T>
-    static RSResult check(const Field & v, const DataTypePtr & type, T min, T max)
+    template <typename T, typename Value>
+    static RSResult check(const Value & v, const DataTypePtr & type, const T & min, const T & max)
     {
         if (!IS_LEGAL(v, min))
             return RSResult::Some;

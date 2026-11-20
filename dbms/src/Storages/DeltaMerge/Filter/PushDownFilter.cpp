@@ -179,7 +179,8 @@ PushDownFilterPtr PushDownFilter::build(
         table_column_defines,
         context.getSettingsRef().dt_enable_rough_set_filter,
         tracing_logger,
-        context.getSettingsRef().dt_enable_trim_minmax);
+        context.getSettingsRef().dt_enable_trim_minmax,
+        context.getSettingsRef().dt_enable_decimal_rough_set_filter);
     // build push down filter
     const auto & pushed_down_filters = dag_query->pushed_down_filters;
     if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan) && !dag_query->filters.empty())

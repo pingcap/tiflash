@@ -37,6 +37,8 @@
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <algorithm>
+#include <array>
 #include <ext/scope_guard.h>
 #include <memory>
 #include <string_view>
@@ -2270,6 +2272,271 @@ MinMaxIndexPtr createMinMaxIndex(const IDataType & col_type, const T & cases)
     return minmax_index;
 }
 } // namespace
+
+namespace
+{
+template <typename ColumnDecimal, typename LiteralDecimal>
+void checkPreparedDecimalComparisons()
+{
+    SCOPED_TRACE(TypeName<ColumnDecimal>::get());
+    SCOPED_TRACE(TypeName<LiteralDecimal>::get());
+    for (bool nullable : {false, true})
+    {
+        SCOPED_TRACE(nullable);
+        DataTypePtr type = std::make_shared<DataTypeDecimal<ColumnDecimal>>(maxDecimalPrecision<ColumnDecimal>(), 2);
+        if (nullable)
+            type = makeNullable(type);
+        MinMaxIndex index(*type);
+        const auto make_column = [&](const std::vector<String> & values) {
+            auto column = type->createColumn();
+            for (const auto & value : values)
+            {
+                ReadBufferFromString buffer(value);
+                type->deserializeTextEscaped(*column, buffer);
+            }
+            return column;
+        };
+        for (const auto & values :
+             std::vector<std::vector<String>>{{"-4.01", "-4.00"}, {"4.00", "4.00"}, {"4.01", "5.00"}})
+        {
+            auto column = make_column(values);
+            if (nullable)
+                column->insertDefault();
+            index.addPack(*column, nullptr);
+        }
+        auto deleted_column = make_column({"100.00"});
+        auto del_mark = ColumnUInt8::create();
+        del_mark->getData().push_back(1);
+        index.addPack(*deleted_column, del_mark.get());
+        if (nullable)
+        {
+            auto null_column = type->createColumn();
+            null_column->insertDefault();
+            index.addPack(*null_column, nullptr);
+        }
+
+        const auto expected_results = [&](const std::array<RSResult, 3> & values, bool null_safe = false) {
+            RSResults results;
+            for (auto value : values)
+            {
+                if (nullable)
+                {
+                    if (null_safe && value == RSResult::All)
+                        value = RSResult::Some;
+                    else if (!null_safe)
+                        value.setHasNull();
+                }
+                results.push_back(value);
+            }
+            // Nullable min/max with a NULL minimum retains the conservative legacy result.
+            results.push_back(nullable ? (null_safe ? RSResult::Some : RSResult::SomeNull) : RSResult::None);
+            if (nullable)
+                results.push_back(null_safe ? RSResult::None : RSResult::SomeNull);
+            return results;
+        };
+
+        struct TestCase
+        {
+            String value;
+            ScaleType scale;
+            std::array<RSResult, 3> equal;
+            std::array<RSResult, 3> greater;
+            std::array<RSResult, 3> greater_equal;
+        };
+        const std::vector<TestCase> cases{
+            {"4.00",
+             2,
+             {RSResult::None, RSResult::All, RSResult::None},
+             {RSResult::None, RSResult::None, RSResult::All},
+             {RSResult::None, RSResult::All, RSResult::All}},
+            {"4",
+             0,
+             {RSResult::None, RSResult::All, RSResult::None},
+             {RSResult::None, RSResult::None, RSResult::All},
+             {RSResult::None, RSResult::All, RSResult::All}},
+            {"4.001",
+             3,
+             {RSResult::None, RSResult::None, RSResult::None},
+             {RSResult::None, RSResult::None, RSResult::All},
+             {RSResult::None, RSResult::None, RSResult::All}},
+            {"-4.001",
+             3,
+             {RSResult::Some, RSResult::None, RSResult::None},
+             {RSResult::Some, RSResult::All, RSResult::All},
+             {RSResult::Some, RSResult::All, RSResult::All}},
+            {"-4.01",
+             2,
+             {RSResult::Some, RSResult::None, RSResult::None},
+             {RSResult::Some, RSResult::All, RSResult::All},
+             {RSResult::All, RSResult::All, RSResult::All}},
+            {"0",
+             0,
+             {RSResult::None, RSResult::None, RSResult::None},
+             {RSResult::None, RSResult::All, RSResult::All},
+             {RSResult::None, RSResult::All, RSResult::All}},
+        };
+        for (const auto & test_case : cases)
+        {
+            SCOPED_TRACE(test_case.value);
+            const Field value(getDecimalField<LiteralDecimal>(
+                test_case.value,
+                maxDecimalPrecision<LiteralDecimal>(),
+                test_case.scale));
+            EXPECT_EQ(
+                index.checkCmp<RoughCheck::CheckEqual>(0, index.size(), value, type),
+                expected_results(test_case.equal));
+            EXPECT_EQ(
+                index.checkCmp<RoughCheck::CheckGreater>(0, index.size(), value, type),
+                expected_results(test_case.greater));
+            EXPECT_EQ(
+                index.checkCmp<RoughCheck::CheckGreaterEqual>(0, index.size(), value, type),
+                expected_results(test_case.greater_equal));
+            EXPECT_EQ(index.checkNullEqual(0, index.size(), value, type), expected_results(test_case.equal, true));
+            EXPECT_EQ(
+                index.checkCmp<RoughCheck::CheckEqual>(1, 1, value, type),
+                RSResults{expected_results(test_case.equal)[1]});
+            EXPECT_EQ(index.checkIn(0, index.size(), {value}, type), expected_results(test_case.equal));
+
+            auto in_results = test_case.equal;
+            in_results[1] = RSResult::All;
+            for (auto & result : in_results)
+                result = result || RSResult::NoneNull;
+            EXPECT_EQ(
+                index.checkIn(0, index.size(), {Field{}, value, Field(getDecimalField<Decimal256>("4", 65, 0))}, type),
+                expected_results(in_results));
+        }
+        EXPECT_EQ(
+            index.checkIn(0, index.size(), {}, type),
+            expected_results({RSResult::None, RSResult::None, RSResult::None}));
+        EXPECT_EQ(
+            index.checkIn(0, index.size(), {Field{}}, type),
+            expected_results({RSResult::NoneNull, RSResult::NoneNull, RSResult::NoneNull}));
+        EXPECT_EQ(
+            index.checkCmp<RoughCheck::CheckEqual>(0, index.size(), Field(Int64(4)), type),
+            expected_results({RSResult::Some, RSResult::Some, RSResult::Some}));
+
+        MinMaxIndex singleton_index(*type);
+        singleton_index.addPack(*deleted_column, nullptr); // Ignore this prefix pack in the checks below.
+        for (const auto & value : {"4.00", "5.00", "4.00"})
+        {
+            auto column = make_column({value});
+            if (nullable)
+                column->insertDefault();
+            singleton_index.addPack(*column, nullptr);
+        }
+        singleton_index.addPack(*deleted_column, del_mark.get());
+        if (nullable)
+        {
+            auto null_column = type->createColumn();
+            null_column->insertDefault();
+            singleton_index.addPack(*null_column, nullptr);
+        }
+
+        const Field four(getDecimalField<LiteralDecimal>("4", maxDecimalPrecision<LiteralDecimal>(), 0));
+        const Field five(getDecimalField<LiteralDecimal>("5", maxDecimalPrecision<LiteralDecimal>(), 0));
+        // Preparing this unused literal would throw, so it detects a missing early exit.
+        const Field invalid_scale(
+            DecimalField<LiteralDecimal>(LiteralDecimal(1), maxDecimalPrecision<Decimal256>() + 1));
+        const auto all_results = expected_results({RSResult::All, RSResult::All, RSResult::All});
+        for (const auto & values : std::vector<std::vector<Field>>{
+                 {four, Field{}, five, invalid_scale},
+                 {five, four, Field{}, invalid_scale}})
+        {
+            EXPECT_EQ(singleton_index.checkIn(1, singleton_index.size() - 1, values, type), all_results);
+        }
+        EXPECT_EQ(singleton_index.checkIn(1, 1, {four, invalid_scale}, type), RSResults{all_results.front()});
+        EXPECT_EQ(
+            singleton_index.checkIn(1, singleton_index.size() - 1, {four, Field{}}, type),
+            expected_results({RSResult::All, RSResult::NoneNull, RSResult::All}));
+        EXPECT_THROW(singleton_index.checkIn(1, 3, {four, invalid_scale}, type), Exception);
+        EXPECT_EQ(
+            singleton_index.checkIn(4, singleton_index.size() - 4, {invalid_scale}, type),
+            RSResults(all_results.begin() + 3, all_results.end()));
+        EXPECT_EQ(singleton_index.checkIn(1, 0, {invalid_scale}, type), RSResults{});
+    }
+}
+
+template <typename T>
+void checkPreparedDecimalOverflow()
+{
+    SCOPED_TRACE(TypeName<T>::get());
+    constexpr auto precision = maxDecimalPrecision<T>();
+    constexpr auto scale = std::min(precision, decimal_max_scale);
+    const String maximum(precision, '9');
+    const String tiny = "0." + String(scale - 1, '0') + "1";
+    const auto make_index = [&](const DataTypePtr & type, const std::vector<String> & values) {
+        auto index = std::make_shared<MinMaxIndex>(*type);
+        for (const auto & value : values)
+        {
+            auto column = type->createColumn();
+            ReadBufferFromString buffer(value);
+            type->deserializeTextEscaped(*column, buffer);
+            index->addPack(*column, nullptr);
+        }
+        return index;
+    };
+
+    // Column values overflow when they are multiplied to match the constant's scale.
+    DataTypePtr integer_type = std::make_shared<DataTypeDecimal<T>>(precision, 0);
+    auto integer_index = make_index(integer_type, {"-" + maximum, "-1", "0", "1", maximum});
+    for (bool negative : {false, true})
+    {
+        const Field value(getDecimalField<T>(negative ? "-" + tiny : tiny, precision, scale));
+        EXPECT_EQ(
+            integer_index->template checkCmp<RoughCheck::CheckEqual>(0, 5, value, integer_type),
+            RSResults(5, RSResult::None));
+        const RSResults expected{
+            RSResult::None,
+            RSResult::None,
+            negative ? RSResult::All : RSResult::None,
+            RSResult::All,
+            RSResult::All};
+        EXPECT_EQ(integer_index->template checkCmp<RoughCheck::CheckGreater>(0, 5, value, integer_type), expected);
+        EXPECT_EQ(integer_index->template checkCmp<RoughCheck::CheckGreaterEqual>(0, 5, value, integer_type), expected);
+    }
+
+    // The constant overflows during its one-time alignment to the column's scale.
+    DataTypePtr fractional_type = std::make_shared<DataTypeDecimal<T>>(precision, scale);
+    auto fractional_index = make_index(fractional_type, {"-" + tiny, "0", tiny});
+    for (bool negative : {false, true})
+    {
+        const Field value(getDecimalField<T>(negative ? "-" + maximum : maximum, precision, 0));
+        EXPECT_EQ(
+            fractional_index->template checkCmp<RoughCheck::CheckEqual>(0, 3, value, fractional_type),
+            RSResults(3, RSResult::None));
+        const RSResults expected(3, negative ? RSResult::All : RSResult::None);
+        EXPECT_EQ(
+            fractional_index->template checkCmp<RoughCheck::CheckGreater>(0, 3, value, fractional_type),
+            expected);
+        EXPECT_EQ(
+            fractional_index->template checkCmp<RoughCheck::CheckGreaterEqual>(0, 3, value, fractional_type),
+            expected);
+    }
+}
+} // namespace
+
+TEST_F(MinMaxIndexTest, PreparedDecimalComparisons)
+try
+{
+#define CHECK_COLUMN(FIELD_TYPE, DATA_TYPE)                    \
+    checkPreparedDecimalComparisons<FIELD_TYPE, Decimal32>();  \
+    checkPreparedDecimalComparisons<FIELD_TYPE, Decimal64>();  \
+    checkPreparedDecimalComparisons<FIELD_TYPE, Decimal128>(); \
+    checkPreparedDecimalComparisons<FIELD_TYPE, Decimal256>();
+    FOR_DECIMAL_TYPES(CHECK_COLUMN)
+#undef CHECK_COLUMN
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, PreparedDecimalOverflow)
+try
+{
+    checkPreparedDecimalOverflow<Decimal32>();
+    checkPreparedDecimalOverflow<Decimal64>();
+    checkPreparedDecimalOverflow<Decimal128>();
+    checkPreparedDecimalOverflow<Decimal256>();
+}
+CATCH
 
 TEST_F(MinMaxIndexTest, CheckDecimal)
 try

@@ -60,9 +60,9 @@ void RuntimeFilter::setTimezoneInfo(const TimezoneInfo & timezone_info_)
     timezone_info = timezone_info_;
 }
 
-void RuntimeFilter::build()
+void RuntimeFilter::build(bool enable_decimal_rough_set_filter)
 {
-    if (!DM::FilterParser::isRSFilterSupportType(target_expr.field_type().tp()))
+    if (!DM::FilterParser::isRSFilterSupportType(target_expr.field_type().tp(), enable_decimal_rough_set_filter))
     {
         throw TiFlashException(
             Errors::Coprocessor::Unimplemented,
