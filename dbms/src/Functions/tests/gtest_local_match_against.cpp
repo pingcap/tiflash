@@ -1193,6 +1193,61 @@ try
 }
 CATCH
 
+TEST_F(TestLocalMatchAgainst, MatchBooleanNgramShortWordsByCollation)
+try
+{
+    const String separator = "\u2063";
+    const String wrapped_four = separator + "4" + separator;
+    const String wrapped_twelve = separator + "12" + separator;
+    const auto documents = createColumn<String>(
+        {wrapped_four,
+         separator + "45" + separator,
+         separator + "14" + separator,
+         "4",
+         "45",
+         wrapped_twelve,
+         separator + "123" + separator},
+        "body");
+    const NamesAndTypes inputs{{"body", documents.type}};
+
+    for (const auto * collation : {"utf8mb4_bin", "utf8mb4_general_ci", "utf8mb4_unicode_ci", "utf8mb4_0900_ai_ci"})
+    {
+        const auto collator = TiDB::ITiDBCollator::getCollator(collation);
+        ASSERT_NE(nullptr, collator);
+        SCOPED_TRACE(collation);
+        const std::string_view name = collation;
+        const bool matches_short_word = name == "utf8mb4_unicode_ci" || name == "utf8mb4_0900_ai_ci";
+
+        auto query = makeRequiredLocalMatchQuery("4");
+        query.set_version(2);
+        query.set_parser(tipb::LocalMatchAgainstParserNgram);
+        query.set_ngram_token_size(2);
+        query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeDisabled);
+        std::vector<tipb::Expr> expressions;
+        expressions.push_back(makeLocalMatchDAGExpr("+4", query, inputs, collator->getCollatorId()));
+        auto * term = query.mutable_nodes(0);
+        term->set_term_type(tipb::LocalMatchAgainstBooleanTermPhrase);
+        expressions.push_back(makeLocalMatchDAGExpr("\"4\"", query, inputs, collator->getCollatorId()));
+        expressions.push_back(
+            makeLocalMatchDAGExpr("\"" + wrapped_four + "\"", query, inputs, collator->getCollatorId()));
+        term->set_text("12");
+        expressions.push_back(
+            makeLocalMatchDAGExpr("\"" + wrapped_twelve + "\"", query, inputs, collator->getCollatorId()));
+        term->set_text("4 12");
+        expressions.push_back(makeLocalMatchDAGExpr("\"4 12\"", query, inputs, collator->getCollatorId()));
+
+        const auto [actions, names] = buildLocalMatchDAGActions(*context, inputs, expressions);
+        Block block({documents});
+        actions->execute(block);
+        const Float64 hit = matches_short_word ? 1 : 0;
+        for (size_t i = 0; i < 3; ++i)
+            ASSERT_COLUMN_EQ(createColumn<Float64>({hit, hit, hit, 0, 0, 0, 0}), block.getByName(names[i]));
+        ASSERT_COLUMN_EQ(createColumn<Float64>({0, 0, 0, 0, 0, 1, 1}), block.getByName(names[3]));
+        ASSERT_COLUMN_EQ(createColumn<Float64>({0, 0, 0, 0, 0, 0, 0}), block.getByName(names[4]));
+    }
+}
+CATCH
+
 TEST_F(TestLocalMatchAgainst, MatchBooleanNgramStopwordSettings)
 try
 {
@@ -1976,6 +2031,99 @@ tipb::LocalMatchAgainstBooleanQuery exactQuery(size_t terms, bool duplicate = fa
     return query;
 }
 } // namespace
+
+TEST_F(TestLocalMatchAgainst, NgramRejectsImpossibleShortTermsBeforeScanning)
+try
+{
+    using namespace LocalMatchAgainstTest;
+    const auto documents = createColumn<String>(
+        {"\u2063"
+         "4"
+         "\u2063",
+         "xy zz yz",
+         "4x",
+         "中x"});
+    constexpr size_t rows = 4;
+    const auto word = tipb::LocalMatchAgainstBooleanTermWord;
+    const auto phrase = tipb::LocalMatchAgainstBooleanTermPhrase;
+    const auto prefix = tipb::LocalMatchAgainstBooleanTermPrefix;
+    Work work;
+    const auto function = create(Matcher::Automatic, work);
+    auto check = [&](const auto & query, TiDB::TiDBCollatorPtr collator, const auto & expected, size_t scanned_rows) {
+        work = {};
+        ASSERT_COLUMN_EQ(
+            expected,
+            runMatcher(
+                {createConstColumn<String>(rows, "query"),
+                 documents,
+                 createConstColumn<String>(rows, serializeLocalMatchAgainstBooleanQuery(query))},
+                collator,
+                Matcher::Automatic,
+                work,
+                0,
+                0,
+                function));
+        EXPECT_EQ(scanned_rows, work.linear_columns);
+    };
+
+    for (const auto id : exact_route_collations)
+    {
+        SCOPED_TRACE(id);
+        const auto * collator = TiDB::ITiDBCollator::getCollator(id);
+        const bool uca = id == TiDB::ITiDBCollator::UTF8_UNICODE_CI || id == TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI
+            || id == TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI;
+        for (const auto type : {word, phrase})
+        {
+            auto query = makeRequiredLocalMatchQuery("4", type);
+            query.set_parser(tipb::LocalMatchAgainstParserNgram);
+            query.set_ngram_token_size(2);
+            query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeDisabled);
+            check(query, collator, createColumn<Float64>({uca ? 1.0 : 0.0, 0, 0, 0}), uca ? rows : 0);
+        }
+    }
+
+    for (const auto name : {"utf8mb4_bin", "utf8mb4_general_ci"})
+    {
+        SCOPED_TRACE(name);
+        const auto * collator = TiDB::ITiDBCollator::getCollator(name);
+        auto query = makeRequiredLocalMatchQuery("中");
+        query.set_parser(tipb::LocalMatchAgainstParserNgram);
+        query.set_ngram_token_size(2);
+        query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeDisabled);
+        auto * node = query.mutable_nodes(0);
+        const auto no_match = createColumn<Float64>({0, 0, 0, 0});
+        const auto matches_xy = createColumn<Float64>({0, 1, 0, 0});
+        check(query, collator, no_match, 0);
+
+        node->set_text("4");
+        node->set_term_type(prefix);
+        check(query, collator, createColumn<Float64>({1, 0, 1, 0}), rows);
+
+        node->set_term_type(phrase);
+        node->set_text("xy 4 yz");
+        check(query, collator, no_match, 0);
+
+        query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeBuiltin);
+        node->set_text("xy a yz");
+        check(query, collator, no_match, 0);
+        node->set_text("a xy");
+        check(query, collator, matches_xy, rows);
+
+        node->set_text("4");
+        node->set_term_type(word);
+        auto * required = query.add_nodes();
+        required->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+        required->set_term_type(word);
+        required->set_text("xy");
+        check(query, collator, no_match, 0);
+        for (const auto occur : {tipb::LocalMatchAgainstBooleanOccurShould, tipb::LocalMatchAgainstBooleanOccurMustNot})
+        {
+            node->set_occur(occur);
+            check(query, collator, matches_xy, rows);
+        }
+    }
+}
+CATCH
 
 TEST_F(TestLocalMatchAgainst, FilteredPhraseAnalyzesRawColumnOnDemand)
 try
