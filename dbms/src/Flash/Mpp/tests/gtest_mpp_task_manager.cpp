@@ -22,6 +22,7 @@
 #include <TiDB/Schema/TiDB.h>
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <ext/scope_guard.h>
 
 namespace DB
@@ -96,6 +97,43 @@ TEST_F(TestMPPTaskManager, RejectsExchangeSenderWithoutReceivers)
         }
     }
 }
+
+TEST_F(TestMPPTaskManager, DumpIncludesRegisteredTasksBeforeActivation)
+try
+{
+    auto context = createContextForTest();
+    auto manager = context->getTMTContext().getMPPTaskManager();
+    auto gather_id = MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "", 1, ""));
+    mpp::TaskMeta first_meta;
+    mpp::TaskMeta second_meta;
+    fillTaskMeta(&first_meta, 1, gather_id);
+    fillTaskMeta(&second_meta, 2, gather_id);
+    auto first_task = MPPTask::newTaskForTest(first_meta, context);
+    auto second_task = MPPTask::newTaskForTest(second_meta, context);
+    SCOPE_EXIT({
+        manager->unregisterTask(first_task->getId(), "");
+        manager->unregisterTask(second_task->getId(), "");
+    });
+
+    EXPECT_TRUE(manager->dumpTasks().empty());
+    ASSERT_TRUE(manager->registerTask(first_task.get()).first);
+    const auto first_inactive = fmt::format("mpp_task={} status=NOT_ACTIVE", first_task->getId().toString());
+    EXPECT_EQ(manager->dumpTasks(), Strings{first_inactive});
+
+    ASSERT_TRUE(manager->registerTask(second_task.get()).first);
+    ASSERT_TRUE(manager->makeTaskActive(first_task).first);
+    const auto second_inactive = fmt::format("mpp_task={} status=NOT_ACTIVE", second_task->getId().toString());
+    auto dump = manager->dumpTasks();
+    ASSERT_EQ(dump.size(), 2);
+    EXPECT_NE(std::find(dump.begin(), dump.end(), first_task->dumpExecutionState()), dump.end());
+    EXPECT_NE(std::find(dump.begin(), dump.end(), second_inactive), dump.end());
+
+    ASSERT_TRUE(manager->unregisterTask(second_task->getId(), "").first);
+    EXPECT_EQ(manager->dumpTasks(), Strings{first_task->dumpExecutionState()});
+    ASSERT_TRUE(manager->unregisterTask(first_task->getId(), "").first);
+    EXPECT_TRUE(manager->dumpTasks().empty());
+}
+CATCH
 
 TEST_F(TestMPPTaskManager, testUnregisterMPPTask)
 try

@@ -35,6 +35,28 @@
 
 namespace DB
 {
+Strings MPPTaskManager::dumpTasks()
+{
+    std::vector<MPPTaskPtr> tasks;
+    Strings result;
+    {
+        std::lock_guard lock(mu);
+        for (const auto & [query_id, query] : mpp_query_map)
+            for (const auto & [gather_id, gather] : query->mpp_gathers)
+                gather->forEachMPPTask([&](const auto & entry) {
+                    if (entry.second)
+                        tasks.push_back(entry.second);
+                    else
+                        result.push_back(fmt::format("mpp_task={} status=NOT_ACTIVE", entry.first.toString()));
+                });
+    }
+    // Keep tasks alive, but never acquire executor locks under the manager lock.
+    result.reserve(result.size() + tasks.size());
+    for (const auto & task : tasks)
+        result.push_back(task->dumpExecutionState());
+    return result;
+}
+
 namespace FailPoints
 {
 extern const char random_task_manager_find_task_failure_failpoint[];

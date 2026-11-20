@@ -30,6 +30,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Operators/Operator.h>
+#include <Storages/ColumnarCancellation.h>
 #include <Storages/IStorage.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #pragma GCC diagnostic push
@@ -110,7 +111,9 @@ public:
         const TiDBTableScan & table_scan,
         const FilterConditions & filter_conditions,
         const std::vector<RemoteTableRange> & remote_table_ranges,
-        unsigned num_streams);
+        unsigned num_streams,
+        PipelineExecutorContext * exec_context = nullptr,
+        ColumnarCancellationPtr cancellation = nullptr);
 
     static std::vector<RNColumnarReadTaskPtr> buildColumnarReadTask(
         const LoggerPtr & log,
@@ -119,7 +122,9 @@ public:
         const TiDBTableScan & table_scan,
         const FilterConditions & filter_conditions,
         const std::vector<RemoteTableRange> & remote_table_ranges,
-        unsigned num_streams);
+        unsigned num_streams,
+        PipelineExecutorContext * exec_context = nullptr,
+        ColumnarCancellationPtr cancellation = nullptr);
 
     BlockInputStreams getInputStreams();
 
@@ -127,13 +132,25 @@ public:
 
     BlockInputStreamPtr createInputStream(const RNColumnarReaderWorkPtr & reader_work);
 
-    ColumnarReaderPtr createColumnarReaderWithBackoff(const RNColumnarReaderWorkPtr & reader_work);
+    ColumnarReaderPtr createColumnarReaderWithBackoff(
+        const RNColumnarReaderWorkPtr & reader_work,
+        const ColumnarCancellationPtr & cancellation = nullptr);
 
-    ColumnarReaderPtr getOrCreateReader(const RNColumnarReaderWorkPtr & reader_work);
+    const ColumnarCancellationPtr & getCancellation() const;
+
+    ColumnarReaderPtr getOrCreateReader(
+        const RNColumnarReaderWorkPtr & reader_work,
+        const ColumnarCancellationPtr & cancellation = nullptr);
+
+    void finishSource();
 
     std::optional<RNColumnarReaderWorkPtr> tryAcquireReaderWork();
 
 #ifdef DBMS_PUBLIC_GTEST
+    static RNColumnarReadTaskPtr createForCancellationTest(
+        ColumnarCancellationPtr cancellation,
+        PipelineExecutorContext * exec_context = nullptr);
+
     void replaceReaderWorkForTest(
         const RNColumnarReaderWorkPtr & reader_work,
         std::vector<RNColumnarReaderPlan> replanned_reader_plans);
@@ -182,6 +199,7 @@ private:
 
     size_t reader_count;
     size_t source_num;
+    std::atomic<size_t> remaining_sources;
     bool has_multi_table_reader_plan;
     std::shared_ptr<RNColumnarReaderSharedContext> shared_reader_context;
     mutable std::mutex pending_reader_works_mutex;
@@ -193,16 +211,17 @@ class RNColumnarInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "RNProxy";
 
 public:
-    ~RNColumnarInputStream();
+    ~RNColumnarInputStream() override;
 
-    String getName() const { return NAME; }
-    Block getHeader() const { return header; }
+    String getName() const override { return NAME; }
+    Block getHeader() const override { return header; }
     void setHeader(const Block & header) { this->header = header; }
-    Block read(FilterPtr & res_filter, bool return_filter);
+    Block read(FilterPtr & res_filter, bool return_filter) override;
+    void cancel(bool kill) override;
 
 protected:
-    Block readImpl();
-    Block readImpl(FilterPtr & res_filter, bool return_filter);
+    Block readImpl() override;
+    Block readImpl(FilterPtr & res_filter, bool return_filter) override;
 
 public:
     struct Options
@@ -221,6 +240,7 @@ public:
         : context(options.context)
         , log(options.log)
         , task(options.task)
+        , cancellation(task ? std::make_shared<ColumnarCancellation>(task->getCancellation()) : nullptr)
         , fixed_reader_work(options.reader_work)
         , action(options.columns_to_read, options.extra_table_id_index)
         , table_id(options.table_id)
@@ -264,6 +284,7 @@ private:
     const Context & context;
     const LoggerPtr log;
     RNColumnarReadTaskPtr task;
+    ColumnarCancellationPtr cancellation;
     const RNColumnarReaderWorkPtr fixed_reader_work;
     RNColumnarReaderWorkPtr current_reader_work;
     std::optional<ColumnarReaderPtr> reader;
@@ -310,6 +331,8 @@ public:
     }
 
     static SourceOpPtr create(const Options & options) { return std::make_unique<RNColumnarSourceOp>(options); }
+
+    ~RNColumnarSourceOp() override { task->finishSource(); }
 
     String getName() const override { return NAME; }
 

@@ -74,6 +74,7 @@ public:
     BaseRuntimeStatistics getRuntimeStatistics() const override;
 
     String getExtraJsonInfo() const override;
+    String dumpActiveTasks() override { return exec_context.dumpActiveTasks(); }
 
 protected:
     ExecutionResult execute(ResultHandler && result_handler) override;

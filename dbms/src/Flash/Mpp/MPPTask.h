@@ -24,6 +24,7 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/TaskStatus.h>
+#include <Interpreters/CancellationHook.h>
 #include <Interpreters/Context_fwd.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -93,6 +94,7 @@ public:
     bool isRootMPPTask() const;
 
     TaskStatus getStatus() const { return status.load(); }
+    String dumpExecutionState();
 
     void handleError(const String & error_msg);
 
@@ -182,7 +184,7 @@ private:
 
     MPPTaskManager * manager;
     std::atomic<bool> is_registered{false};
-    std::atomic<bool> is_cancelled{false};
+    const std::shared_ptr<CancellationSource> cancellation = std::make_shared<CancellationSource>();
 
     MPPTaskScheduleEntry schedule_entry;
 

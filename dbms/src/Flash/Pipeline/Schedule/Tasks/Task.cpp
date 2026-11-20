@@ -19,7 +19,14 @@
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <common/logger_useful.h>
 
+#include <ext/scope_guard.h>
 #include <magic_enum.hpp>
+#if defined(__linux__)
+#include <sys/syscall.h>
+#include <unistd.h>
+#else
+#include <pthread.h>
+#endif
 
 namespace DB
 {
@@ -33,6 +40,18 @@ extern const char exception_during_query_run[];
 
 namespace
 {
+UInt64 currentDiagnosticThreadId()
+{
+#if defined(__linux__)
+    return static_cast<UInt64>(syscall(SYS_gettid));
+#elif defined(__APPLE__)
+    UInt64 id = 0;
+    pthread_threadid_np(nullptr, &id);
+    return id;
+#else
+    return static_cast<UInt64>(pthread_getthreadid_np());
+#endif
+}
 // TODO supports more detailed status transfer metrics, such as from waiting to running.
 ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
 {
@@ -68,12 +87,13 @@ Task::Task(PipelineExecutorContext & exec_context_, const String & req_id, ExecT
     , mem_tracker_holder(exec_context_.getMemoryTracker())
     , mem_tracker_ptr(mem_tracker_holder.get())
     , task_status(init_status)
+    , diagnostic_status(init_status)
 {
     assert(mem_tracker_holder.get() == mem_tracker_ptr);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
     addToStatusMetrics(task_status);
 
-    exec_context.incActiveRefCount();
+    exec_context.registerTask(this);
 }
 
 Task::Task(PipelineExecutorContext & exec_context_)
@@ -92,10 +112,13 @@ Task::~Task()
     }
 
     // In order to ensure that `PipelineExecutorContext` will not be destructed before `Task` is destructed.
-    exec_context.decActiveRefCount();
+    exec_context.unregisterTask(this);
 }
 
 #define EXECUTE(function)                                                                   \
+    static thread_local const auto thread_id = currentDiagnosticThreadId();                 \
+    diagnostic_thread_id.store(thread_id, std::memory_order_relaxed);                       \
+    SCOPE_EXIT({ diagnostic_thread_id.store(0, std::memory_order_relaxed); });              \
     fiu_do_on(FailPoints::random_pipeline_model_cancel_failpoint, exec_context.cancel());   \
     if unlikely (exec_context.isCancelled())                                                \
     {                                                                                       \
@@ -154,6 +177,8 @@ ExecTaskStatus Task::await()
 
 void Task::notify()
 {
+    diagnostic_thread_id.store(currentDiagnosticThreadId(), std::memory_order_relaxed);
+    SCOPE_EXIT({ diagnostic_thread_id.store(0, std::memory_order_relaxed); });
     assert(task_status == ExecTaskStatus::WAIT_FOR_NOTIFY);
     auto next_status = notifyImpl();
     // If the query has been canceled,
@@ -166,6 +191,8 @@ void Task::notify()
 
 void Task::finalize()
 {
+    diagnostic_thread_id.store(currentDiagnosticThreadId(), std::memory_order_relaxed);
+    SCOPE_EXIT({ diagnostic_thread_id.store(0, std::memory_order_relaxed); });
     assert(current_notify_future == nullptr);
     // To make sure that `finalize` only called once.
     RUNTIME_ASSERT(!is_finalized, log, "finalize can only be called once.");
@@ -199,7 +226,13 @@ void Task::switchStatus(ExecTaskStatus to)
 #endif // !NDEBUG
         addToStatusMetrics(to);
         task_status = to;
+        diagnostic_status.store(to, std::memory_order_relaxed);
     }
+}
+
+void Task::describeOperators(String operators)
+{
+    exec_context.describeTask(this, std::move(operators));
 }
 
 const String & Task::getQueryId() const

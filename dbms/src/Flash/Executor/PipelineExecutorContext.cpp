@@ -20,10 +20,13 @@
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Operators/CTE.h>
 #include <Operators/SharedQueue.h>
 
 #include <exception>
+#include <ext/scope_guard.h>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -111,7 +114,7 @@ void PipelineExecutorContext::wait()
     {
         std::unique_lock lock(mu);
         RUNTIME_ASSERT(isWaitMode());
-        cv.wait(lock, [&] { return 0 == active_ref_count; });
+        waitForDrain(lock);
     }
     LOG_DEBUG(log, "query finished and wait done");
 }
@@ -143,7 +146,7 @@ void PipelineExecutorContext::consume(ResultHandler & result_handler)
     // In order to ensure that `decActiveRefCount` has finished calling at this point
     // and avoid referencing the already destructed `mu` in `decActiveRefCount`.
     std::unique_lock lock(mu);
-    cv.wait(lock, [&] { return 0 == active_ref_count; });
+    waitForDrain(lock);
     LOG_DEBUG(log, "query finished and consume done");
 }
 
@@ -151,6 +154,86 @@ void PipelineExecutorContext::incActiveRefCount()
 {
     std::lock_guard lock(mu);
     ++active_ref_count;
+}
+
+void PipelineExecutorContext::registerTask(const Task * task)
+{
+    std::lock_guard lock(mu);
+    active_tasks.emplace(task, "non-pipeline task");
+    ++active_ref_count;
+}
+
+void PipelineExecutorContext::unregisterTask(const Task * task)
+{
+    {
+        std::lock_guard lock(mu);
+        active_tasks.erase(task);
+    }
+    decActiveRefCount();
+}
+
+void PipelineExecutorContext::describeTask(const Task * task, String operators)
+{
+    std::lock_guard lock(mu);
+    active_tasks.at(task) = std::move(operators);
+}
+
+String PipelineExecutorContext::dumpActiveTasksLocked(size_t limit)
+{
+    String dump
+        = fmt::format("query_id={} active_ref_count={} tasks={}", query_id, active_ref_count, active_tasks.size());
+    size_t count = 0;
+    for (const auto & [task, operators] : active_tasks)
+    {
+        if (count++ == limit)
+        {
+            dump += " (remaining tasks omitted)";
+            break;
+        }
+        dump += fmt::format(
+            " [task={} status={} thread_id={} operators={}]",
+            static_cast<const void *>(task),
+            magic_enum::enum_name(task->getDiagnosticStatus()),
+            task->getDiagnosticThreadId(),
+            operators);
+    }
+    return dump;
+}
+
+String PipelineExecutorContext::dumpActiveTasks()
+{
+    std::lock_guard lock(mu);
+    return dumpActiveTasksLocked(std::numeric_limits<size_t>::max());
+}
+
+void PipelineExecutorContext::waitForDrain(std::unique_lock<std::mutex> & lock)
+{
+    cv.wait(lock, [&] { return active_ref_count == 0 || cancelled_at != std::chrono::steady_clock::time_point{}; });
+    auto next_warning = cancelled_at + std::chrono::seconds(30);
+    while (active_ref_count != 0)
+    {
+        if (cv.wait_until(lock, next_warning, [&] { return active_ref_count == 0; }))
+            break;
+        const auto elapsed
+            = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - cancelled_at).count();
+        try
+        {
+            auto dump = dumpActiveTasksLocked(32);
+            lock.unlock();
+            SCOPE_EXIT({ lock.lock(); });
+            LOG_WARNING(
+                log,
+                "Cancelled executor has not drained for {}s: {}. Worker references must remain alive.",
+                elapsed,
+                dump);
+        }
+        catch (...)
+        {
+            // Diagnostics may fail under memory pressure. Never leave wait()
+            // while workers can still access the executor or query context.
+        }
+        next_warning = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    }
 }
 
 void PipelineExecutorContext::decActiveRefCount()
@@ -178,6 +261,15 @@ void PipelineExecutorContext::cancel()
     bool origin_value = false;
     if (is_cancelled.compare_exchange_strong(origin_value, true, std::memory_order_release))
     {
+        std::vector<std::function<void()>> callbacks;
+        {
+            std::lock_guard lock(mu);
+            cancelled_at = std::chrono::steady_clock::now();
+            callbacks.swap(cancellation_callbacks);
+            cv.notify_all();
+        }
+        for (auto & callback : callbacks)
+            callback();
         cancelSharedQueues();
         cancelOneTimeFutures();
         if (likely(dag_context))
@@ -204,6 +296,19 @@ void PipelineExecutorContext::cancel()
                 .keyspace_id = getKeyspaceID(),
                 .resource_group_name = resource_group_name});
     }
+}
+
+void PipelineExecutorContext::addCancellationCallback(std::function<void()> callback)
+{
+    {
+        std::lock_guard lock(mu);
+        if (!isCancelled())
+        {
+            cancellation_callbacks.push_back(std::move(callback));
+            return;
+        }
+    }
+    callback();
 }
 
 ResultQueuePtr PipelineExecutorContext::toConsumeMode(size_t queue_size)

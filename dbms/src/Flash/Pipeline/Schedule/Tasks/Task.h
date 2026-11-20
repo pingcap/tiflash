@@ -77,6 +77,8 @@ public:
     virtual ~Task();
 
     ExecTaskStatus getStatus() const { return task_status; }
+    ExecTaskStatus getDiagnosticStatus() const { return diagnostic_status.load(std::memory_order_relaxed); }
+    UInt64 getDiagnosticThreadId() const { return diagnostic_thread_id.load(std::memory_order_relaxed); }
 
     ExecTaskStatus execute();
 
@@ -130,6 +132,7 @@ public:
     LoggerPtr log;
 
 protected:
+    void describeOperators(String operators);
     virtual ExecTaskStatus executeImpl() = 0;
     virtual ExecTaskStatus executeIOImpl() { return ExecTaskStatus::RUNNING; }
     // Avoid allocating memory in `await` if possible.
@@ -158,6 +161,8 @@ private:
     MemoryTracker * mem_tracker_ptr;
 
     ExecTaskStatus task_status;
+    std::atomic<ExecTaskStatus> diagnostic_status;
+    std::atomic<UInt64> diagnostic_thread_id{0};
     NotifyType notify_type{NotifyType::WAIT_ON_NOTHING};
 
     bool is_finalized = false;
