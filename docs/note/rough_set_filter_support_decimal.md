@@ -49,6 +49,17 @@ The implementation should support decimal comparisons across physical decimal ty
 - `Decimal128` column vs `Decimal64` literal
 - `Decimal256` column vs `Decimal128` literal
 
+## Configuration
+
+`profiles.default.dt_enable_decimal_rough_set_filter` controls decimal rough set filtering and defaults to `true`.
+Set it to `false` to disable decimal predicates and decimal runtime filters in rough set filtering. Other supported column types continue to use rough set filtering.
+This setting controls reads only; decimal min-max indexes are still generated when writing DMFiles.
+
+```toml
+[profiles.default]
+dt_enable_decimal_rough_set_filter = false
+```
+
 ## Non-Goal
 
 This change should only support decimal-vs-decimal comparison.

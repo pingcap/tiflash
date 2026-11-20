@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Common/MyTime.h>
+#include <DataStreams/RuntimeFilter.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeMyDateTime.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessorUtils.h>
@@ -40,6 +42,7 @@
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
 
+#include <ext/scope_guard.h>
 #include <regex>
 
 namespace DB
@@ -1140,6 +1143,142 @@ try
     expect_rs_operator("select * from default.t_111 where col_decimal = 1", "unsupported");
     expect_rs_operator("select * from default.t_111 where col_decimal in (1, 2)", "unsupported");
     expect_rs_operator("select * from default.t_111 where col_decimal is null", "isnull");
+}
+CATCH
+
+TEST_F(FilterParserTest, DecimalRoughSetFilterSetting)
+try
+{
+    EXPECT_TRUE(Settings{}.dt_enable_decimal_rough_set_filter);
+    auto & settings = ctx->getSettingsRef();
+    const bool previous_setting = settings.dt_enable_decimal_rough_set_filter;
+    const bool previous_rough_set_setting = settings.dt_enable_rough_set_filter;
+    SCOPE_EXIT({
+        settings.dt_enable_decimal_rough_set_filter = previous_setting;
+        settings.dt_enable_rough_set_filter = previous_rough_set_setting;
+    });
+    settings.dt_enable_rough_set_filter = true;
+
+    TiDB::ColumnInfo decimal_info;
+    decimal_info.id = 5;
+    decimal_info.tp = TiDB::TypeNewDecimal;
+    decimal_info.flen = 15;
+    decimal_info.decimal = 2;
+    TiDB::ColumnInfo int_info;
+    int_info.id = 2;
+    int_info.tp = TiDB::TypeLongLong;
+    const TiDB::ColumnInfos column_infos{decimal_info, int_info};
+    const DM::ColumnDefines columns{
+        DM::ColumnDefine{5, "col_decimal", createDecimal(15, 2)},
+        DM::ColumnDefine{2, "col_int", std::make_shared<DataTypeInt64>()},
+    };
+    const auto decimal_col = buildColumnRefExpr(decimal_info, 0);
+    const auto int_col = buildColumnRefExpr(int_info, 1);
+    const auto decimal_literal = buildDecimalLiteralExpr(Decimal64(123), 15, 2);
+    const auto parse = [&](const tipb::Expr & expr, bool pushed_down = false) {
+        google::protobuf::RepeatedPtrField<tipb::Expr> filters;
+        google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
+        (pushed_down ? pushed_down_filters : filters).Add()->CopyFrom(expr);
+        const tipb::ANNQueryInfo ann_query_info;
+        const std::vector<int> runtime_filter_ids;
+        auto dag_query = std::make_unique<DAGQueryInfo>(
+            filters,
+            ann_query_info,
+            pushed_down_filters,
+            column_infos,
+            runtime_filter_ids,
+            0,
+            default_timezone_info);
+        return DM::RSOperator::build(
+            dag_query,
+            column_infos,
+            columns,
+            settings.dt_enable_rough_set_filter,
+            log,
+            settings.dt_enable_trim_minmax,
+            settings.dt_enable_decimal_rough_set_filter);
+    };
+
+    const std::vector<std::pair<tipb::Expr, String>> decimal_predicates{
+        {buildScalarFuncExpr(tipb::ScalarFuncSig::GTDecimal, {decimal_col, decimal_literal}), "greater"},
+        {buildScalarFuncExpr(tipb::ScalarFuncSig::GEDecimal, {decimal_col, decimal_literal}), "greater_equal"},
+        {buildScalarFuncExpr(tipb::ScalarFuncSig::LTDecimal, {decimal_col, decimal_literal}), "less"},
+        {buildScalarFuncExpr(tipb::ScalarFuncSig::LEDecimal, {decimal_col, decimal_literal}), "less_equal"},
+        {buildScalarFuncExpr(tipb::ScalarFuncSig::EQDecimal, {decimal_col, decimal_literal}), "equal"},
+        {buildScalarFuncExpr(tipb::ScalarFuncSig::NullEQDecimal, {decimal_col, decimal_literal}), "null_equal"},
+        {buildScalarFuncExpr(tipb::ScalarFuncSig::InDecimal, {decimal_col, decimal_literal}), "in"},
+        {buildScalarFuncExpr(tipb::ScalarFuncSig::DecimalIsNull, {decimal_col}), "isnull"},
+        {buildScalarFuncExpr(tipb::ScalarFuncSig::NullEQDecimal, {decimal_col, constructNULLLiteralTiExpr()}),
+         "isnull"},
+    };
+    for (bool enabled : {true, false})
+    {
+        SCOPED_TRACE(enabled);
+        settings.dt_enable_decimal_rough_set_filter = enabled;
+        for (const auto & [expr, expected_name] : decimal_predicates)
+        {
+            SCOPED_TRACE(expected_name);
+            for (bool pushed_down : {false, true})
+            {
+                const auto op = parse(expr, pushed_down);
+                ASSERT_NE(op, nullptr);
+                EXPECT_EQ(op->name(), enabled ? expected_name : "unsupported");
+                const auto requests = op->getIndexRequests();
+                ASSERT_EQ(requests.size(), enabled ? 1 : 0);
+                if (enabled)
+                    EXPECT_EQ(requests[0].col_id, decimal_info.id);
+                else
+                    EXPECT_EQ(op->roughCheck(0, 2, {}), DM::RSResults(2, DM::RSResult::Some));
+            }
+        }
+    }
+
+    // Disabling decimal checks must preserve integer pruning and conservative NOT/OR semantics.
+    settings.dt_enable_decimal_rough_set_filter = false;
+    const auto decimal_predicate = decimal_predicates.front().first;
+    const auto int_predicate
+        = buildScalarFuncExpr(tipb::ScalarFuncSig::EQInt, {int_col, constructInt64LiteralTiExpr(9)});
+    const auto int_type = std::make_shared<DataTypeInt64>();
+    auto int_column = int_type->createColumn();
+    int_column->insert(Field(Int64(1)));
+    auto int_index = std::make_shared<DM::MinMaxIndex>(*int_type);
+    int_index->addPack(*int_column, nullptr);
+    DM::RSCheckParam param;
+    param.indexes.emplace(int_info.id, DM::RSIndex(int_type, int_index));
+    const auto int_op = parse(int_predicate);
+    EXPECT_EQ(int_op->roughCheck(0, 1, param), DM::RSResults{DM::RSResult::None});
+    for (auto sig : {tipb::ScalarFuncSig::LogicalAnd, tipb::ScalarFuncSig::LogicalOr})
+    {
+        const auto op = parse(buildScalarFuncExpr(sig, {decimal_predicate, int_predicate}));
+        const auto requests = op->getIndexRequests();
+        ASSERT_EQ(requests.size(), 1);
+        EXPECT_EQ(requests[0].col_id, int_info.id);
+        EXPECT_EQ(
+            op->roughCheck(0, 1, param),
+            DM::RSResults{sig == tipb::ScalarFuncSig::LogicalAnd ? DM::RSResult::None : DM::RSResult::Some});
+    }
+    const auto not_op = parse(buildScalarFuncExpr(tipb::ScalarFuncSig::UnaryNotInt, {decimal_predicate}));
+    EXPECT_TRUE(not_op->getIndexRequests().empty());
+    EXPECT_EQ(not_op->roughCheck(0, 1, param), DM::RSResults{DM::RSResult::Some});
+
+    auto legacy_decimal_col = decimal_col;
+    legacy_decimal_col.mutable_field_type()->set_tp(TiDB::TypeDecimal);
+    EXPECT_EQ(
+        parse(buildScalarFuncExpr(tipb::ScalarFuncSig::EQDecimal, {legacy_decimal_col, decimal_literal}))->name(),
+        "unsupported");
+
+    tipb::RuntimeFilter rf_proto;
+    rf_proto.set_id(1);
+    rf_proto.set_rf_type(tipb::IN);
+    rf_proto.add_source_expr_list()->CopyFrom(decimal_col);
+    rf_proto.add_target_expr_list()->CopyFrom(decimal_col);
+    RuntimeFilter decimal_rf(rf_proto);
+    EXPECT_NO_THROW(decimal_rf.build());
+    EXPECT_THROW(decimal_rf.build(false), TiFlashException);
+    rf_proto.mutable_source_expr_list(0)->CopyFrom(int_col);
+    rf_proto.mutable_target_expr_list(0)->CopyFrom(int_col);
+    RuntimeFilter int_rf(rf_proto);
+    EXPECT_NO_THROW(int_rf.build(false));
 }
 CATCH
 

@@ -150,6 +150,15 @@ private:
         size_t pack_count,
         const std::vector<Field> & values,
         const DataTypePtr & type);
+    template <typename T, typename IsValidPack>
+    RSResults checkDecimalInImpl(
+        const IColumn & column,
+        size_t start_pack,
+        size_t pack_count,
+        const std::vector<Field> & values,
+        const DataTypePtr & type,
+        const IsValidPack & is_valid_pack,
+        RSResult invalid_pack_result);
     RSResults checkNullableIn(
         size_t start_pack,
         size_t pack_count,
