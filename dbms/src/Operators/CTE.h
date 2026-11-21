@@ -21,6 +21,7 @@
 #include <tipb/select.pb.h>
 
 #include <condition_variable>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -31,11 +32,18 @@ namespace DB
 class CTE
 {
 public:
+    // cte_sink_num/cte_source_num come from the MPP request and are untrusted.
+    // expected_source_num is also used as the Int16 refcount of each pushed block, so both
+    // counts must be positive and fit in Int16. Otherwise an oversized value can trigger
+    // unbounded allocation, a truncated refcount or a CTE that can never be released.
+    static constexpr size_t MAX_EXPECTED_TASK_NUM = std::numeric_limits<Int16>::max();
+
     CTE(size_t partition_num_, size_t expected_sink_num_, size_t expected_source_num_)
         : partition_num(partition_num_)
         , expected_sink_num(expected_sink_num_)
         , expected_source_num(expected_source_num_)
     {
+        checkExpectedTaskNums(this->expected_sink_num, this->expected_source_num);
         for (size_t i = 0; i < this->partition_num; i++)
         {
             this->partitions.push_back(CTEPartition());
@@ -213,6 +221,8 @@ private:
 
         return CTEOpStatus::OK;
     }
+
+    static void checkExpectedTaskNums(size_t expected_sink_num, size_t expected_source_num);
 
     Int32 getTotalExitNumNoLock() const noexcept { return this->sink_exit_num + this->source_exit_num; }
     Int32 getSinkExitNumNoLock() const noexcept { return this->sink_exit_num; }

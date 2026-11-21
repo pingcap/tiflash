@@ -122,6 +122,32 @@ try
 }
 CATCH
 
+TEST_F(ExpandExecutorTestRunner, ExpandRejectsEmptyGroupingSet)
+try
+{
+    for (bool pipeline : {false, true})
+    {
+        SCOPED_TRACE(pipeline);
+        enablePipeline(pipeline);
+        auto request = context.scan("test_db", "test_table")
+                           .expand(MockVVecColumnNameVec{
+                               MockVecColumnNameVec{},
+                               MockVecColumnNameVec{MockColumnNameVec{"s1"}},
+                           })
+                           .build(context);
+        try
+        {
+            executeStreams(request);
+            ADD_FAILURE() << "Expected malformed Expand grouping set to be rejected";
+        }
+        catch (const TiFlashException & e)
+        {
+            EXPECT_TRUE(e.getError().is(Errors::Planner::BadRequest)) << e.standardText();
+        }
+    }
+}
+CATCH
+
 TEST_F(ExpandExecutorTestRunner, Expand2Logical)
 try
 {
