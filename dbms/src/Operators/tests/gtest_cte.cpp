@@ -13,11 +13,14 @@
 // limitations under the License.
 
 #include <Columns/ColumnVector.h>
+#include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Mpp/CTEManager.h>
 #include <Operators/CTE.h>
 #include <Operators/CTEPartition.h>
 #include <Operators/CTEReader.h>
+#include <Operators/CTESourceOp.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
 #include <gtest/gtest.h>
@@ -124,6 +127,39 @@ try
         std::sort(received_results.begin(), received_results.end());
         for (size_t i = 0; i < row_num; i++)
             ASSERT_EQ(received_results[i], i);
+    }
+}
+CATCH
+
+TEST_F(TestCTE, BlockSchemaMismatch)
+try
+{
+    String query_id_and_cte_id("pingcap_schema_mismatch");
+    CTEManager manager;
+    auto cte = manager.getOrCreateCTE(query_id_and_cte_id, 1, 1, 1);
+    cte->registerSink();
+
+    auto reader = std::make_shared<CTEReader>(query_id_and_cte_id, &manager, cte);
+
+    // The consumer declares a String column while the producer pushes an Int32 block,
+    // mimicking a mismatched CTESource/CTESink pair sent by a malicious MPP client.
+    NamesAndTypes schema{{"col0", std::make_shared<DataTypeString>()}};
+    PipelineExecutorContext exec_context;
+    CTESourceOp source_op(exec_context, "schema_mismatch", reader, 0, schema, query_id_and_cte_id);
+
+    ASSERT_TRUE(cte->pushBlock<false>(0, generateBlocks(0, MAX_BLOCK_ROW_NUM)[0]));
+
+    Block block;
+    try
+    {
+        source_op.read(block);
+        FAIL() << "Expected a block schema mismatch exception";
+    }
+    catch (const DB::Exception & e)
+    {
+        // Check the message so the test still covers the release-mode validation when the
+        // debug-only SourceOp::read structure check would also throw for this input.
+        ASSERT_NE(String::npos, e.message().find("Block schema mismatch in CTESourceOp"));
     }
 }
 CATCH
