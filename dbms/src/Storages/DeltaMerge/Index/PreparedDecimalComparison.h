@@ -38,9 +38,8 @@ struct PreparedDecimalComparison
         T column_value = static_cast<T>(right);
         if constexpr (scale_column)
         {
-            const int sign = boost::math::sign(column_value);
             if (unlikely(common::mulOverflow(column_value, column_multiplier, column_value)))
-                return Op<int, int>::apply(0, sign);
+                return Op<int, int>::apply(0, boost::math::sign(static_cast<T>(right)));
         }
         return Op<T, T>::apply(value, column_value);
     }
