@@ -100,6 +100,12 @@ struct RestoreConfig
     size_t restore_partition_id;
 };
 
+<<<<<<< HEAD
+=======
+class TaskStopSource;
+using TaskStopSourcePtr = std::shared_ptr<TaskStopSource>;
+
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
 class OneTimeNotifyFuture;
 using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
 
@@ -181,7 +187,12 @@ public:
         const String & flag_mapped_entry_helper_name_,
         size_t probe_cache_column_threshold_,
         bool is_test,
+<<<<<<< HEAD
         const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list);
+=======
+        const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list,
+        const TaskStopSourcePtr & probe_stop_source_ = nullptr);
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
 
     RestoreConfig restore_config;
 
@@ -268,7 +279,12 @@ public:
     {
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
+<<<<<<< HEAD
         active_probe_threads = probe_concurrency;
+=======
+        pending_probe_streams = probe_concurrency;
+        probe_finished.store(false, std::memory_order_release);
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
     }
 
     void wakeUpAllWaitingThreads();
@@ -280,6 +296,12 @@ public:
 
     // Return true if it is the last probe thread.
     bool finishOneProbe(size_t stream_index);
+<<<<<<< HEAD
+=======
+    // Stop the shared probe phase without counting this stream as a normal input completion.
+    void stopProbePhase();
+    const TaskStopSourcePtr & getProbeStopSource() const { return probe_stop_source; }
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
     void finalizeProbe();
     void waitUntilAllProbeFinished() const;
     bool isProbeFinishedForPipeline() const;
@@ -368,8 +390,18 @@ private:
 
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
+<<<<<<< HEAD
     size_t active_probe_threads;
     std::atomic_bool probe_finished{false};
+=======
+    // Streams that have not finished probe input normally.
+    size_t pending_probe_streams;
+    // Normal input completion may be followed by unmatched-row scanning or restore work.
+    // Early stop never decrements pending_probe_streams or marks normal completion.
+    std::atomic_bool probe_finished{false};
+    // Shared by the original Join and its restore descendants, including their auxiliary tasks.
+    const TaskStopSourcePtr probe_stop_source;
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
 
     bool skip_wait = false;
     bool meet_error = false;

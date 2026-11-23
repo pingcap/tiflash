@@ -32,9 +32,11 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     const JoinPtr & join_,
     size_t op_index_,
     size_t max_block_size,
-    const Block & input_header)
+    const Block & input_header,
+    const TaskStopSourcePtr & input_stop_)
     : TransformOp(exec_context_, req_id)
     , origin_join(join_)
+    , input_stop(input_stop_)
     , probe_process_info(max_block_size, join_->getProbeCacheColumnThreshold())
 {
     RUNTIME_CHECK_MSG(origin_join != nullptr, "join ptr should not be null.");
@@ -62,6 +64,11 @@ void HashJoinProbeTransformOp::transformHeaderImpl(Block & header_)
     header_ = origin_join->getOutputBlock();
 }
 
+void HashJoinProbeTransformOp::onEarlyStop()
+{
+    probe_transform->stopProbePhase();
+}
+
 void HashJoinProbeTransformOp::operateSuffixImpl()
 {
     LOG_DEBUG(
@@ -72,6 +79,29 @@ void HashJoinProbeTransformOp::operateSuffixImpl()
         scan_hash_map_rows);
 }
 
+<<<<<<< HEAD
+=======
+bool HashJoinProbeTransformOp::finishIfProbeStopped()
+{
+    if (!probe_transform->isProbePhaseStopped())
+        return false;
+
+    if (status == ProbeStatus::READ_SCAN_HASH_MAP_DATA)
+        probe_transform->abortScanHashMapAfterProbe();
+    switchStatus(ProbeStatus::FINISHED);
+    return true;
+}
+
+bool HashJoinProbeTransformOp::finishIfProbeStopped(Block & block)
+{
+    if (!finishIfProbeStopped())
+        return false;
+
+    block = {};
+    return true;
+}
+
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
 OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
 {
     while (true)
@@ -163,9 +193,25 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 {
     if (status == ProbeStatus::PROBE && probe_process_info.all_rows_joined_finish)
     {
+<<<<<<< HEAD
         if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info);
             ret != OperatorStatus::HAS_OUTPUT)
             return ret;
+=======
+        // For an empty build, do not fill a probe block. onOutput below still advances
+        // V1's shared probe completion state machine, including RightSemi post-processing.
+        if (!probe_transform->shouldSkipProbe())
+        {
+            if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info);
+                ret != OperatorStatus::HAS_OUTPUT)
+                return ret;
+        }
+        else if (input_stop)
+        {
+            // An empty build discards its input, but the Join still completes its normal probe state machine.
+            input_stop->stop();
+        }
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
     }
 
     return onOutput(block);

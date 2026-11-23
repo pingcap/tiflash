@@ -43,7 +43,8 @@ PipelineExecPtr PipelineExecBuilder::build(bool has_pipeline_breaker_wait_time)
         std::move(source_op),
         std::move(transform_ops),
         std::move(sink_op),
-        has_pipeline_breaker_wait_time);
+        has_pipeline_breaker_wait_time,
+        std::move(input_stops));
 }
 
 OperatorProfileInfoPtr PipelineExecBuilder::getCurProfileInfo() const
@@ -151,5 +152,17 @@ IOProfileInfos PipelineExecGroupBuilder::getCurIOProfileInfos() const
     for (const auto & builder : getCurGroup())
         ret.push_back(builder.getCurIOProfileInfo());
     return ret;
+}
+
+TaskStopSourcePtr PipelineExecGroupBuilder::addInputStop(TaskStopSourcePtr source)
+{
+    if (!source)
+        source = std::make_shared<TaskStopSource>();
+    // Earlier groups stop entirely; the current group retains operators appended after this boundary.
+    for (size_t i = 0; i < groups.size(); ++i)
+        for (auto & builder : groups[i])
+            builder.input_stops.push_back(
+                {source, i + 1 < groups.size() ? std::nullopt : std::make_optional(builder.transform_ops.size())});
+    return source;
 }
 } // namespace DB

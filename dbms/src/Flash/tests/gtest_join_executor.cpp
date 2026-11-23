@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Flash/tests/gtest_join.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTOrderByElement.h>
 
 #include <magic_enum.hpp>
 
@@ -256,6 +258,413 @@ try
 }
 CATCH
 
+<<<<<<< HEAD
+=======
+TEST_F(JoinExecutorTestRunner, EmptyBuildInnerJoinSkipsProbe)
+try
+{
+    context.addMockTable(
+        "empty_build_join",
+        "probe_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+    context.addExchangeReceiver("empty_build_receiver", {{"a", TiDB::TP::TypeLong}});
+
+    auto request = context.scan("empty_build_join", "probe_table")
+                       .join(context.receive("empty_build_receiver"), tipb::JoinType::TypeInnerJoin, {col("a")})
+                       .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    Expect expect{{"table_scan_0", {0, 10}}, {"exchange_receiver_1", {0, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, EmptyBuildWithExchangeProbeDoesNotSkipProbe)
+try
+{
+    context.addMockTable(
+        "exchange_probe_join",
+        "build_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {})});
+    context.addExchangeReceiver(
+        "probe_from_exchange_receiver",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+
+    auto request
+        = context.receive("probe_from_exchange_receiver")
+              .join(context.scan("exchange_probe_join", "build_table"), tipb::JoinType::TypeInnerJoin, {col("a")})
+              .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    // The probe input comes from an exchange receiver, so the probe must not be skipped:
+    // the receiver still consumes all 3 rows although the build side is empty.
+    Expect expect{{"exchange_receiver_0", {3, 10}}, {"table_scan_1", {0, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, BuildWithOnlyNullKeysInnerJoinSkipsProbe)
+try
+{
+    context.addMockTable(
+        "null_key_build_join",
+        "probe_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+    context.addExchangeReceiver(
+        "null_key_build_receiver",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {{}})});
+
+    auto request = context.scan("null_key_build_join", "probe_table")
+                       .join(context.receive("null_key_build_receiver"), tipb::JoinType::TypeInnerJoin, {col("a")})
+                       .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    Expect expect{{"table_scan_0", {0, 10}}, {"exchange_receiver_1", {1, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, EmptyBuildSemiJoinSkipsProbe)
+try
+{
+    context.addMockTable(
+        "empty_build_semi_join",
+        "probe_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+    context.addExchangeReceiver("empty_build_semi_receiver", {{"a", TiDB::TP::TypeLong}});
+
+    auto request = context.scan("empty_build_semi_join", "probe_table")
+                       .join(context.receive("empty_build_semi_receiver"), tipb::JoinType::TypeSemiJoin, {col("a")})
+                       .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    Expect expect{{"table_scan_0", {0, 10}}, {"exchange_receiver_1", {0, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, BuildWithOnlyNullKeysSemiJoinSkipsProbe)
+try
+{
+    context.addMockTable(
+        "null_key_build_semi_join",
+        "probe_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+    context.addExchangeReceiver(
+        "null_key_build_semi_receiver",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {{}})});
+
+    auto request = context.scan("null_key_build_semi_join", "probe_table")
+                       .join(context.receive("null_key_build_semi_receiver"), tipb::JoinType::TypeSemiJoin, {col("a")})
+                       .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    Expect expect{{"table_scan_0", {0, 10}}, {"exchange_receiver_1", {1, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, BuildRowsFilteredOutInnerAndSemiJoinSkipsProbe)
+try
+{
+    context.addMockTable(
+        "filtered_build_join",
+        "probe_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+    context.addMockTable(
+        "filtered_build_join",
+        "build_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+
+    /// Keep non-empty build input, but filter every build row before it reaches the join.
+    for (const auto join_type : {tipb::JoinType::TypeInnerJoin, tipb::JoinType::TypeSemiJoin})
+    {
+        auto request = context.scan("filtered_build_join", "probe_table")
+                           .join(
+                               context.scan("filtered_build_join", "build_table")
+                                   .filter(gt(col("a"), lit(Field(static_cast<Int64>(100))))),
+                               join_type,
+                               {col("a")})
+                           .build(context);
+
+        WRAP_FOR_TEST_BEGIN
+        WRAP_FOR_JOIN_TEST_BEGIN
+        if (!enable_pipeline && cfg.enable_join_v2)
+            continue;
+
+        executeAndAssertColumnsEqual(request, {});
+        Expect expect{
+            {"table_scan_0", {0, 10}},
+            {"table_scan_1", {3, 10}},
+            {"selection_2", {0, 10}},
+            {"Join_3", {0, 10}}};
+        testForExecutionSummary(request, expect);
+        WRAP_FOR_JOIN_TEST_END
+        WRAP_FOR_TEST_END
+    }
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, EmptyBuildRightSemiJoinDoesNotSkipExchangeProbe)
+try
+{
+    context.addMockTable("empty_build_right_semi_join", "build_table", {{"a", TiDB::TP::TypeLong}});
+    context.addExchangeReceiver(
+        "empty_build_right_semi_receiver",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+
+    auto request = context.scan("empty_build_right_semi_join", "build_table")
+                       .join(
+                           context.receive("empty_build_right_semi_receiver"),
+                           tipb::JoinType::TypeSemiJoin,
+                           {col("a")},
+                           {},
+                           {},
+                           {},
+                           {},
+                           0,
+                           false,
+                           0)
+                       .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    // The probe input comes from an exchange receiver, so the probe must not be skipped:
+    // the receiver still consumes all 3 rows although the build side is empty.
+    Expect expect{{"table_scan_0", {0, 10}}, {"exchange_receiver_1", {3, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, BuildWithOnlyNullKeysRightSemiJoinDoesNotSkipExchangeProbe)
+try
+{
+    context.addMockTable(
+        "null_key_build_right_semi_join",
+        "build_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {{}})});
+    context.addExchangeReceiver(
+        "null_key_build_right_semi_receiver",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+
+    auto request = context.scan("null_key_build_right_semi_join", "build_table")
+                       .join(
+                           context.receive("null_key_build_right_semi_receiver"),
+                           tipb::JoinType::TypeSemiJoin,
+                           {col("a")},
+                           {},
+                           {},
+                           {},
+                           {},
+                           0,
+                           false,
+                           0)
+                       .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    // The probe input comes from an exchange receiver, so the probe must not be skipped:
+    // the receiver still consumes all 3 rows although no build row enters the hash table.
+    Expect expect{{"table_scan_0", {1, 10}}, {"exchange_receiver_1", {3, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, EmptyBuildAntiSemiJoinStillReadsProbe)
+try
+{
+    context.addMockTable(
+        "empty_build_anti_semi_join",
+        "probe_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+    context.addExchangeReceiver("empty_build_anti_semi_receiver", {{"a", TiDB::TP::TypeLong}});
+
+    auto request
+        = context.scan("empty_build_anti_semi_join", "probe_table")
+              .join(context.receive("empty_build_anti_semi_receiver"), tipb::JoinType::TypeAntiSemiJoin, {col("a")})
+              .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    Expect expect{{"table_scan_0", {3, 10}}, {"exchange_receiver_1", {0, 10}}, {"Join_2", {3, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
+#if !defined(NDEBUG) && defined(FIU_ENABLE)
+TEST_F(JoinExecutorTestRunner, PipelineRightOuterJoinLimitMaySkipProbeFinish)
+try
+{
+    const MockColumnInfoVec columns{{"key", TiDB::TP::TypeLong, false}};
+    context.addExchangeReceiver("probe", columns, {toVec<Int32>("key", {})}, 2);
+    context.mockStorage()->addFineGrainedExchangeData(
+        "probe",
+        {ColumnsWithTypeAndName{toVec<Int32>("key", {1, 1})}, ColumnsWithTypeAndName{toVec<Int32>("key", {})}});
+    context.addMockTable("limit_join", "build", columns, {toVec<Int32>("key", {1, 100})});
+
+    context.context->setSetting("enable_resource_control", "true");
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(1)));
+    for (bool constant_topn : {false, true})
+    {
+        auto builder = context.receive("probe", 2)
+                           .join(context.scan("limit_join", "build"), tipb::JoinType::TypeRightOuterJoin, {col("key")});
+        std::shared_ptr<tipb::DAGRequest> request;
+        if (constant_topn)
+        {
+            ASTPtr collation;
+            auto order_by = std::make_shared<ASTOrderByElement>(-1, -1, false, collation);
+            order_by->children.push_back(lit(Field(UInt64(1))));
+            auto order_by_items = std::make_shared<ASTExpressionList>();
+            order_by_items->children.push_back(order_by);
+            request = builder.topN(order_by_items, lit(Field(UInt64(1)))).build(context);
+        }
+        else
+            request = builder.limit(1).build(context);
+
+        DAGContext dagContext(*request, "pipeline_right_outer_join_limit", 2);
+        TiFlashTestEnv::setUpTestContext(*context.context, &dagContext, context.mockStorage(), TestType::EXECUTOR_TEST);
+        auto queryExecutor = queryExecute(*context.context, true);
+        ASSERT_EQ(dagContext.getExecutionMode(), ExecutionMode::Pipeline);
+
+        // Keep the stream with data from reaching the probe input until the empty stream has reported probe completion.
+        auto stream_0_gate = SyncPointCtl::enableInScope("before_hash_join_probe_stream_0");
+        auto stream_1_finished = SyncPointCtl::enableInScope("after_hash_join_finish_one_probe_stream_1");
+        auto probe_stopped = SyncPointCtl::enableInScope("after_hash_join_probe_stop");
+        auto execution = std::async(std::launch::async, [&queryExecutor]() {
+            return queryExecutor->execute([](const Block &) {});
+        });
+
+        // This is only a watchdog. Sanitizer CI can delay an already scheduled pipeline event for over one second.
+        constexpr auto test_timeout = std::chrono::seconds(10);
+        auto waitForSyncPoint = [test_timeout](SyncPointScopeGuard & sync_point) {
+            std::promise<void> waiter_started;
+            auto waiter_started_future = waiter_started.get_future();
+            auto waiting = std::async(std::launch::async, [&sync_point, waiter = std::move(waiter_started)]() mutable {
+                waiter.set_value();
+                try
+                {
+                    sync_point.waitAndPause();
+                    return true;
+                }
+                catch (...)
+                {
+                    return false;
+                }
+            });
+            waiter_started_future.wait();
+            if (waiting.wait_for(test_timeout) == std::future_status::ready)
+                return waiting.get();
+
+            // Closing the sync point releases a thread blocked in SyncPointCtl::sync().
+            sync_point.disable();
+            waiting.get();
+            return false;
+        };
+
+        auto cleanup = [&] {
+            stream_0_gate.disable();
+            stream_1_finished.disable();
+            probe_stopped.disable();
+            queryExecutor->cancel();
+            execution.get();
+        };
+
+        // The empty stream has now decremented pending_probe_streams and is held before it can continue.
+        if (!waitForSyncPoint(stream_1_finished))
+        {
+            cleanup();
+            FAIL() << "The empty probe stream did not reach finishOneProbe().";
+        }
+        // Confirm that stream 0 has acquired the sync channels before disabling the input gate.
+        if (!waitForSyncPoint(stream_0_gate))
+        {
+            cleanup();
+            FAIL() << "The data probe stream did not reach the input gate.";
+        }
+        stream_0_gate.disable();
+
+        // The data stream reaches LIMIT and publishes the shared stop state before the empty stream is released.
+        if (!waitForSyncPoint(probe_stopped))
+        {
+            cleanup();
+            FAIL() << "The data probe stream did not publish probe stop after LIMIT.";
+        }
+        // Other stopped probe operators may also run their suffix. The ordering is established now,
+        // so release this gate for all streams before allowing the empty stream to continue.
+        probe_stopped.disable();
+        stream_1_finished.next();
+
+        if (execution.wait_for(test_timeout) != std::future_status::ready)
+        {
+            cleanup();
+            FAIL() << "Pipeline execution did not finish after the hash join probe stop.";
+        }
+        ASSERT_TRUE(execution.get().is_success);
+    }
+}
+CATCH
+#endif
+
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
 TEST_F(JoinExecutorTestRunner, MultiJoin)
 try
 {

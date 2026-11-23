@@ -28,6 +28,7 @@
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskTimer.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskWaiter.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/CrossJoinProbeHelper.h>
 #include <Interpreters/Join.h>
@@ -112,7 +113,10 @@ const DataTypePtr Join::flag_mapped_entry_helper_type = std::make_shared<Pointer
 const size_t MAX_RESTORE_ROUND_IN_GTEST = 2;
 #endif
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
 Join::Join(
     const Names & key_names_left_,
     const Names & key_names_right_,
@@ -134,7 +138,12 @@ Join::Join(
     const String & flag_mapped_entry_helper_name_,
     size_t probe_cache_column_threshold_,
     bool is_test_,
+<<<<<<< HEAD
     const std::vector<RuntimeFilterPtr> & runtime_filter_list_)
+=======
+    const std::vector<RuntimeFilterPtr> & runtime_filter_list_,
+    const TaskStopSourcePtr & probe_stop_source_)
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
     : restore_config(restore_config_)
     , match_helper_name(match_helper_name_)
     , flag_mapped_entry_helper_name(flag_mapped_entry_helper_name_)
@@ -148,7 +157,12 @@ Join::Join(
     , build_concurrency(0)
     , active_build_threads(0)
     , probe_concurrency(0)
+<<<<<<< HEAD
     , active_probe_threads(0)
+=======
+    , pending_probe_streams(0)
+    , probe_stop_source(probe_stop_source_ ? probe_stop_source_ : std::make_shared<TaskStopSource>())
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
     , collators(collators_)
     , non_equal_conditions(non_equal_conditions_)
     , max_block_size(max_block_size_)
@@ -171,6 +185,19 @@ Join::Join(
     , enable_fine_grained_shuffle(fine_grained_shuffle_count_ > 0)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
+<<<<<<< HEAD
+=======
+    RUNTIME_CHECK_MSG(
+        key_names_left_.size() == key_names_right_.size(),
+        "Left and right join key sizes must be equal, left={}, right={}",
+        key_names_left_.size(),
+        key_names_right_.size());
+    RUNTIME_CHECK_MSG(
+        key_names_left_.size() == is_null_eq_.size(),
+        "Join key size and is_null_eq size must be equal, keys={}, is_null_eq={}",
+        key_names_left_.size(),
+        is_null_eq_.size());
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
     has_other_condition = non_equal_conditions.other_cond_expr != nullptr;
     bool is_semi = isSemiFamily(kind) || isLeftOuterSemiFamily(kind) || isNullAwareSemiFamily(kind);
     if (is_semi && !has_other_condition)
@@ -406,7 +433,13 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         match_helper_name,
         flag_mapped_entry_helper_name,
         probe_cache_column_threshold,
+<<<<<<< HEAD
         is_test);
+=======
+        is_test,
+        dummy_runtime_filter_list,
+        probe_stop_source);
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
     /// init output names after finalize, the restored join don't need to finalize
     ret->output_columns_after_finalize = output_columns_after_finalize;
     ret->output_column_names_set_after_finalize = output_column_names_set_after_finalize;
@@ -1959,6 +1992,7 @@ void Join::waitUntilAllBuildFinished() const
 bool Join::finishOneProbe(size_t stream_index)
 {
     std::unique_lock lock(build_probe_mutex);
+<<<<<<< HEAD
     if (active_probe_threads == 1)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
@@ -1970,6 +2004,24 @@ bool Join::finishOneProbe(size_t stream_index)
         return true;
     }
     return false;
+=======
+    if (unlikely(isProbeStopped()))
+        return false;
+    --pending_probe_streams;
+    if (pending_probe_streams != 0)
+        return false;
+
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
+    workAfterProbeFinish(stream_index);
+    return true;
+}
+
+void Join::stopProbePhase()
+{
+    // Pipeline tasks subscribe to this source directly. Do not finish normal-completion futures or cancel
+    // restore queues to wake them: stopping work is distinct from completing build/probe input.
+    probe_stop_source->stop();
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
 }
 
 void Join::finalizeProbe()
@@ -1978,8 +2030,13 @@ void Join::finalizeProbe()
         std::unique_lock lock(build_probe_mutex);
         if (hash_join_spill_context->getProbeSpiller())
             hash_join_spill_context->getProbeSpiller()->finishSpill();
+<<<<<<< HEAD
         assert(active_probe_threads == 0);
         probe_finished = true;
+=======
+        assert(pending_probe_streams == 0);
+        probe_finished.store(true, std::memory_order_release);
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
     }
     probe_cv.notify_all();
     wait_probe_finished_future->finish();
@@ -1988,14 +2045,24 @@ void Join::finalizeProbe()
 void Join::waitUntilAllProbeFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
+<<<<<<< HEAD
     probe_cv.wait(lock, [&]() { return probe_finished || meet_error || skip_wait; });
+=======
+    probe_cv.wait(lock, [&]() {
+        return isProbeStopped() || probe_finished.load(std::memory_order_acquire) || meet_error || skip_wait;
+    });
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
     if (meet_error)
         throw Exception(error_message);
 }
 
 bool Join::isProbeFinishedForPipeline() const
 {
+<<<<<<< HEAD
     if (!probe_finished)
+=======
+    if (!isProbeStopped() && !probe_finished.load(std::memory_order_acquire))
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
     {
         setNotifyFuture(wait_probe_finished_future.get());
         return false;
@@ -2003,6 +2070,14 @@ bool Join::isProbeFinishedForPipeline() const
     return true;
 }
 
+<<<<<<< HEAD
+=======
+bool Join::isProbeStopped() const
+{
+    return probe_stop_source->isStopped();
+}
+
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
 bool Join::isBuildFinishedForPipeline() const
 {
     if (!build_finished)
@@ -2019,7 +2094,11 @@ void Join::finishOneNonJoin(size_t partition_index)
     // When spill is not enabled, all build data blocks are stored in the same partition, so the join partition cannot be released.
     if (isEnableSpill())
     {
+<<<<<<< HEAD
         if likely (build_finished && probe_finished)
+=======
+        if likely (build_finished && probe_finished.load(std::memory_order_acquire) && !isProbeStopped())
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
         {
             /// only clear hash table if not active build/probe threads
             while (partition_index < build_concurrency)

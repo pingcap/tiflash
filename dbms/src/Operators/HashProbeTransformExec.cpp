@@ -42,6 +42,19 @@ HashProbeTransformExec::HashProbeTransformExec(
     , max_block_size(max_block_size_)
 {}
 
+<<<<<<< HEAD
+=======
+bool HashProbeTransformExec::isProbePhaseStopped() const
+{
+    return join->isProbeStopped();
+}
+
+void HashProbeTransformExec::stopProbePhase()
+{
+    join->stopProbePhase();
+}
+
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
 HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
 {
     if unlikely (exec_context.isCancelled())
@@ -63,6 +76,13 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
             restore_probe_exec->parent = shared_from_this();
             restore_probe_exec->probe_restore_stream = restore_info->probe_stream;
 
+<<<<<<< HEAD
+=======
+            // The parent may have stopped while it was creating this restore join. The child shares its stop source.
+            if unlikely (restore_probe_exec->isProbePhaseStopped())
+                return {};
+
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
             /// Trigger build side restore task to restore and rebuild hash partition.
             /// The probe side operator just waits for the build hash partition to complete.
             ///
@@ -74,6 +94,8 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
             ///                       ▼
             ///             HashProbeTransformExec
             PipelineExecBuilder build_builder;
+            // Late-created restore work observes the same persistent stop as the original probe.
+            build_builder.input_stops.push_back({join->getProbeStopSource(), std::nullopt});
             auto req_id = fmt::format("{} restore_build_{}", log->identifier(), restore_info->stream_index);
             build_builder.setSourceOp(
                 std::make_unique<IOBlockInputStreamSourceOp>(exec_context, req_id, restore_info->build_stream));
@@ -107,14 +129,31 @@ void HashProbeTransformExec::startRestoreProbe()
     ///                       | pop and probe
     ///                       ▼
     ///             HashProbeTransformExec (probe restored hash partition)
+<<<<<<< HEAD
+=======
+    if unlikely (isProbePhaseStopped())
+        return false;
+
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
     assert(!is_probe_restore_done && probe_restore_stream);
     // Use 1 as the queue_size to avoid accumulating too many blocks and causing the memory to exceed the limit.
     assert(!probe_source_holder);
 
     SharedQueueSinkHolderPtr probe_sink_holder;
     std::tie(probe_sink_holder, probe_source_holder) = SharedQueue::build(exec_context, 1, 1, -1, 1);
+<<<<<<< HEAD
     TaskScheduler::instance->submit(
         std::make_unique<StreamRestoreTask>(exec_context, log->identifier(), probe_restore_stream, probe_sink_holder));
+=======
+    if unlikely (isProbePhaseStopped())
+        return false;
+    TaskScheduler::instance->submit(std::make_unique<StreamRestoreTask>(
+        exec_context,
+        log->identifier(),
+        probe_restore_stream,
+        probe_sink_holder,
+        join->getProbeStopSource()));
+>>>>>>> 62eb59b780 (fix: stop pipeline input consistently when LIMIT finishes early (#11278))
     probe_restore_stream.reset();
 }
 
