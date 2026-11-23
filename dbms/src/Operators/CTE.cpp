@@ -21,6 +21,27 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int INCORRECT_DATA;
+}
+
+void CTE::checkExpectedTaskNums(size_t expected_sink_num, size_t expected_source_num)
+{
+    if unlikely (expected_sink_num < 1 || expected_sink_num > MAX_EXPECTED_TASK_NUM)
+        throw Exception(
+            ErrorCodes::INCORRECT_DATA,
+            "Invalid cte_sink_num: {}, expected range is [1, {}]",
+            expected_sink_num,
+            MAX_EXPECTED_TASK_NUM);
+    if unlikely (expected_source_num < 1 || expected_source_num > MAX_EXPECTED_TASK_NUM)
+        throw Exception(
+            ErrorCodes::INCORRECT_DATA,
+            "Invalid cte_source_num: {}, expected range is [1, {}]",
+            expected_source_num,
+            MAX_EXPECTED_TASK_NUM);
+}
+
 CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block)
 {
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
