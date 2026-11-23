@@ -34,6 +34,8 @@
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
 #include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
 
+#include <algorithm>
+
 namespace DB::DM
 {
 
@@ -306,17 +308,17 @@ RSResults MinMaxIndex::checkDecimalInImpl(
         if (is_valid_pack(i))
             active_packs.push_back(i);
     }
-    bool has_null_value = false;
+    // Early exit on Some may skip a trailing NULL literal. Collect NULLs first so
+    // the final result preserves its NULL flag, including when used by NOT IN.
+    const bool has_null_value
+        = std::any_of(values.begin(), values.end(), [](const Field & value) { return value.isNull(); });
     // Visit constants first so their type dispatch and scale alignment are outside the pack loop.
     for (const auto & value : values)
     {
         if (active_packs.empty())
             break;
         if (value.isNull())
-        {
-            has_null_value = true;
             continue;
-        }
         details::withPreparedDecimalComparison<T>(value, type, [&](const auto & comparison) {
             size_t remaining_count = 0;
             for (const auto i : active_packs)
@@ -328,10 +330,12 @@ RSResults MinMaxIndex::checkDecimalInImpl(
                              type,
                              minmaxes_data[i * 2],
                              minmaxes_data[i * 2 + 1]);
-                if (!result.allMatch())
+                // Some already means this pack may match, so further literals are unnecessary.
+                // When min != max, CheckEqual cannot yield All. If an unsupported comparison
+                // returns Some before a later All, retaining Some is conservative, even for NOT IN.
+                if (!result.isUse())
                     active_packs[remaining_count++] = i;
             }
-            // Completed packs no longer need comparisons with subsequent literals.
             active_packs.resize(remaining_count);
         });
     }

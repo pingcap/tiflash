@@ -2437,6 +2437,23 @@ void checkPreparedDecimalComparisons()
         // Preparing this unused literal would throw, so it detects a missing early exit.
         const Field invalid_scale(
             DecimalField<LiteralDecimal>(LiteralDecimal(1), maxDecimalPrecision<Decimal256>() + 1));
+        const auto some_result = nullable ? RSResult::SomeNull : RSResult::Some;
+        EXPECT_EQ(index.checkIn(2, 1, {five, invalid_scale}, type), RSResults{some_result});
+        for (const auto & values :
+             std::vector<std::vector<Field>>{{five, invalid_scale, Field{}}, {Field{}, five, invalid_scale}})
+        {
+            EXPECT_EQ(index.checkIn(2, 1, values, type), RSResults{RSResult::SomeNull});
+        }
+        const Field negative(getDecimalField<LiteralDecimal>("-4.001", maxDecimalPrecision<LiteralDecimal>(), 3));
+        EXPECT_EQ(
+            index.checkIn(0, index.size(), {negative, four, five, invalid_scale, Field{}}, type),
+            expected_results({RSResult::SomeNull, RSResult::All, RSResult::SomeNull}));
+
+        // An unsupported literal may prevent a later singleton match from improving Some to All.
+        const Field unsupported(Int64(4));
+        EXPECT_EQ(singleton_index.checkIn(1, 1, {unsupported, four, invalid_scale}, type), RSResults{some_result});
+        EXPECT_EQ(singleton_index.checkIn(1, 1, {unsupported, four, Field{}}, type), RSResults{RSResult::SomeNull});
+
         const auto all_results = expected_results({RSResult::All, RSResult::All, RSResult::All});
         for (const auto & values : std::vector<std::vector<Field>>{
                  {four, Field{}, five, invalid_scale},
@@ -2453,6 +2470,37 @@ void checkPreparedDecimalComparisons()
             singleton_index.checkIn(4, singleton_index.size() - 4, {invalid_scale}, type),
             RSResults(all_results.begin() + 3, all_results.end()));
         EXPECT_EQ(singleton_index.checkIn(1, 0, {invalid_scale}, type), RSResults{});
+
+        auto not_in_index = std::make_shared<MinMaxIndex>(*type);
+        for (const auto & values : std::vector<std::vector<String>>{{"4.01", "5.00"}, {"5.00"}, {"6.00", "7.00"}})
+        {
+            auto column = make_column(values);
+            if (nullable)
+                column->insertDefault();
+            not_in_index->addPack(*column, nullptr);
+        }
+        RSCheckParam param;
+        param.indexes.emplace(DEFAULT_COL_ID, RSIndex(type, not_in_index));
+        const Attr decimal_attr{DEFAULT_COL_NAME, DEFAULT_COL_ID, type};
+        const RSResults not_in_results{
+            some_result,
+            nullable ? RSResult::NoneNull : RSResult::None,
+            nullable ? RSResult::AllNull : RSResult::All};
+        EXPECT_EQ(createNot(createIn(decimal_attr, {five}))->roughCheck(0, 3, param), not_in_results);
+        const RSResults not_in_null_results{
+            RSResult::SomeNull,
+            nullable ? RSResult::NoneNull : RSResult::None,
+            RSResult::AllNull};
+        for (const auto & values : std::vector<std::vector<Field>>{{five, Field{}}, {Field{}, five}})
+        {
+            EXPECT_EQ(createNot(createIn(decimal_attr, values))->roughCheck(0, 3, param), not_in_null_results);
+        }
+        EXPECT_EQ(
+            createNot(createIn(decimal_attr, {unsupported, five}))->roughCheck(0, 3, param),
+            RSResults(3, some_result));
+        EXPECT_EQ(
+            createNot(createIn(decimal_attr, {unsupported, five, Field{}}))->roughCheck(0, 3, param),
+            RSResults(3, RSResult::SomeNull));
     }
 }
 
