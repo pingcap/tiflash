@@ -234,14 +234,16 @@ public:
         return tasks;
     }
 
-    static JoinPtr createJoin(const Block & header, ASTTableJoin::Kind kind)
+    static JoinPtr createJoin(const Block & probe_header, const Block & build_header, ASTTableJoin::Kind kind)
     {
-        const auto & key = header.getByPosition(0);
-        NamesAndTypes schema{{key.name, key.type}};
+        const auto & probe_key = probe_header.getByPosition(0);
+        const auto & build_key = build_header.getByPosition(0);
+        const auto & output_key = kind == ASTTableJoin::Kind::RightSemi ? build_key : probe_key;
+        NamesAndTypes schema{{output_key.name, output_key.type}};
         SpillConfig spill_config("/tmp", "input_stop_test", 0, 0, 0, nullptr);
         auto join = std::make_shared<Join>(
-            Names{key.name},
-            Names{key.name},
+            Names{probe_key.name},
+            Names{build_key.name},
             std::vector<UInt8>{0},
             kind,
             "input_stop_test",
@@ -261,8 +263,8 @@ public:
             "",
             0,
             true);
-        join->initBuild(header, 1);
-        join->finalize(Names{key.name});
+        join->initBuild(build_header, 1);
+        join->finalize(Names{output_key.name});
         join->setLocalProbeSource(true);
         join->setInitActiveBuildThreads();
         return join;
@@ -680,9 +682,10 @@ TEST_F(PipelineInputStopTest, PlannerLimitStopsJoinWaitingForProbeInput)
             group.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_context, "", header, source));
     });
     auto header = builders.getCurrentHeader();
-    auto join = createJoin(header, ASTTableJoin::Kind::Inner);
-    Block build_block = header.cloneEmpty();
-    auto column = header.getByPosition(0).type->createColumn();
+    Block build_header{{header.getByPosition(0).type, "build_v"}};
+    auto join = createJoin(header, build_header, ASTTableJoin::Kind::Inner);
+    Block build_block = build_header.cloneEmpty();
+    auto column = build_header.getByPosition(0).type->createColumn();
     column->insert(Field(Int64(1)));
     build_block.getByPosition(0).column = std::move(column);
     join->insertFromBlock(build_block, 0);
@@ -751,9 +754,11 @@ TEST_F(PipelineInputStopTest, PlannerEmptyBuildStopsBackpressuredProducer)
                 group.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_context, "", header, queue_source));
         });
         auto header = builders.getCurrentHeader();
-        auto key = header.getByPosition(0).name;
-        NamesAndTypes schema{{key, header.getByPosition(0).type}};
-        auto join = createJoin(header, kind);
+        Block build_header{{header.getByPosition(0).type, "build_v"}};
+        const auto & output_key
+            = kind == ASTTableJoin::Kind::RightSemi ? build_header.getByPosition(0) : header.getByPosition(0);
+        NamesAndTypes schema{{output_key.name, output_key.type}};
+        auto join = createJoin(header, build_header, kind);
         ASSERT_TRUE(join->finishOneBuild(0));
         join->finalizeBuild();
         ASSERT_TRUE(join->shouldSkipProbe());
