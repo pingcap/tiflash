@@ -493,7 +493,7 @@ std::vector<RuntimeFilterPtr> TiFlashJoin::genRuntimeFilterList(
         // check if rs operator support runtime filter target expr type
         try
         {
-            runtime_filter->build(context.getSettingsRef().dt_enable_decimal_rough_set_filter);
+            runtime_filter->build();
             dag_analyzer.appendRuntimeFilterProperties(runtime_filter);
             /// update the source column name to use the join key as source column
             const auto & updated_key_name_it = key_names_map.find(runtime_filter->getSourceColumnName());

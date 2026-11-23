@@ -82,8 +82,7 @@ public:
         const ColumnDefines & table_column_defines,
         bool enable_rs_filter,
         const LoggerPtr & tracing_logger,
-        bool enable_trim_minmax = false,
-        bool enable_decimal_rough_set_filter = true);
+        bool enable_trim_minmax = false);
 };
 
 class ColCmpVal : public RSOperator

@@ -37,7 +37,7 @@ namespace DM
 namespace cop
 {
 // This is a pre-check for rough set filter support type.
-inline bool isRoughSetFilterSupportType(const Int32 field_type, bool enable_decimal_rough_set_filter)
+inline bool isRoughSetFilterSupportType(const Int32 field_type)
 {
     switch (field_type)
     {
@@ -57,7 +57,7 @@ inline bool isRoughSetFilterSupportType(const Int32 field_type, bool enable_deci
         return true;
     case TiDB::TypeDecimal:
     case TiDB::TypeNewDecimal:
-        return enable_decimal_rough_set_filter;
+        return true;
     // For these types, should take collation into consideration. Disable them.
     case TiDB::TypeVarchar:
     case TiDB::TypeJSON:
@@ -115,8 +115,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
     const FilterParser::RSFilterType filter_type,
     const TiDB::ColumnInfos & scan_column_infos,
     const FilterParser::AttrCreatorByColumnID & creator,
-    const TimezoneInfo & timezone_info,
-    bool enable_decimal_rough_set_filter)
+    const TimezoneInfo & timezone_info)
 {
     if (unlikely(expr.children_size() != 2 && filter_type != FilterParser::RSFilterType::In))
         return createUnsupported(fmt::format(
@@ -164,7 +163,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
                     tipb::ScalarFuncSig_Name(expr.sig())));
 
             auto field_type = child.field_type().tp();
-            if (!isRoughSetFilterSupportType(field_type, enable_decimal_rough_set_filter))
+            if (!isRoughSetFilterSupportType(field_type))
                 return createUnsupported(fmt::format(
                     "ColumnRef with field type is not supported, sig={} field_type={}",
                     tipb::ScalarFuncSig_Name(expr.sig()),
@@ -276,8 +275,7 @@ RSOperatorPtr parseTiExpr(
     const TiDB::ColumnInfos & scan_column_infos,
     const FilterParser::AttrCreatorByColumnID & creator,
     const TimezoneInfo & timezone_info,
-    const LoggerPtr & log,
-    bool enable_decimal_rough_set_filter)
+    const LoggerPtr & log)
 {
     if (unlikely(!isFunctionExpr(expr)))
         return createUnsupported(
@@ -304,13 +302,7 @@ RSOperatorPtr parseTiExpr(
                     fmt::format("logical not with {} children is not supported", expr.children_size()));
 
             if (const auto & child = expr.children(0); likely(isFunctionExpr(child)))
-                return createNot(parseTiExpr(
-                    child,
-                    scan_column_infos,
-                    creator,
-                    timezone_info,
-                    log,
-                    enable_decimal_rough_set_filter));
+                return createNot(parseTiExpr(child, scan_column_infos, creator, timezone_info, log));
             else
                 return createUnsupported(fmt::format(
                     "child of logical not is not function, child_type={}",
@@ -325,13 +317,7 @@ RSOperatorPtr parseTiExpr(
             for (const auto & child : expr.children())
             {
                 if (likely(isFunctionExpr(child)))
-                    children.emplace_back(parseTiExpr(
-                        child,
-                        scan_column_infos,
-                        creator,
-                        timezone_info,
-                        log,
-                        enable_decimal_rough_set_filter));
+                    children.emplace_back(parseTiExpr(child, scan_column_infos, creator, timezone_info, log));
                 else
                     children.emplace_back(createUnsupported(fmt::format(
                         "child of logical operator is not function, child_type={}",
@@ -351,13 +337,7 @@ RSOperatorPtr parseTiExpr(
         case FilterParser::RSFilterType::Less:
         case FilterParser::RSFilterType::LessEqual:
         case FilterParser::RSFilterType::In:
-            return parseTiCompareExpr(
-                expr,
-                filter_type,
-                scan_column_infos,
-                creator,
-                timezone_info,
-                enable_decimal_rough_set_filter);
+            return parseTiCompareExpr(expr, filter_type, scan_column_infos, creator, timezone_info);
 
         case FilterParser::RSFilterType::IsNull:
         {
@@ -378,7 +358,7 @@ RSOperatorPtr parseTiExpr(
             if (likely(isColumnExpr(child)))
             {
                 auto field_type = child.field_type().tp();
-                if (isRoughSetFilterSupportType(field_type, enable_decimal_rough_set_filter))
+                if (isRoughSetFilterSupportType(field_type))
                 {
                     auto col_id = getColumnIDForColumnExpr(child, scan_column_infos);
                     auto attr = creator(col_id);
@@ -411,31 +391,18 @@ RSOperatorPtr FilterParser::parseDAGQuery(
     const TiDB::ColumnInfos & scan_column_infos,
     FilterParser::AttrCreatorByColumnID && creator,
     const LoggerPtr & log,
-    bool enable_trim_minmax,
-    bool enable_decimal_rough_set_filter)
+    bool enable_trim_minmax)
 {
     /// By default, multiple conditions with operator "and"
     RSOperators children;
     children.reserve(dag_info.filters.size() + dag_info.pushed_down_filters.size());
     for (const auto & filter : dag_info.filters)
     {
-        children.emplace_back(cop::parseTiExpr(
-            filter,
-            scan_column_infos,
-            creator,
-            dag_info.timezone_info,
-            log,
-            enable_decimal_rough_set_filter));
+        children.emplace_back(cop::parseTiExpr(filter, scan_column_infos, creator, dag_info.timezone_info, log));
     }
     for (const auto & filter : dag_info.pushed_down_filters)
     {
-        children.emplace_back(cop::parseTiExpr(
-            filter,
-            scan_column_infos,
-            creator,
-            dag_info.timezone_info,
-            log,
-            enable_decimal_rough_set_filter));
+        children.emplace_back(cop::parseTiExpr(filter, scan_column_infos, creator, dag_info.timezone_info, log));
     }
 
     if (children.empty())
@@ -512,9 +479,9 @@ std::optional<Attr> FilterParser::createAttr(
     return std::nullopt;
 }
 
-bool FilterParser::isRSFilterSupportType(const Int32 field_type, bool enable_decimal_rough_set_filter)
+bool FilterParser::isRSFilterSupportType(const Int32 field_type)
 {
-    return cop::isRoughSetFilterSupportType(field_type, enable_decimal_rough_set_filter);
+    return cop::isRoughSetFilterSupportType(field_type);
 }
 
 std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser::scalar_func_rs_filter_map{

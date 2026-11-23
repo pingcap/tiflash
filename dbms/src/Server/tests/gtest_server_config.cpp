@@ -109,7 +109,6 @@ result_rows = 0
 [profiles.default]
 max_memory_usage = 123456
 dt_enable_rough_set_filter = false
-dt_enable_decimal_rough_set_filter = false
 )",
     };
 
@@ -144,7 +143,6 @@ dt_enable_decimal_rough_set_filter = false
             {
                 EXPECT_EQ(settings.max_memory_usage.getActualBytes(0), 123456UL);
                 EXPECT_FALSE(settings.dt_enable_rough_set_filter);
-                EXPECT_FALSE(settings.dt_enable_decimal_rough_set_filter);
             }
             QuotaForIntervals * quota_raw_ptr = nullptr;
             ASSERT_NO_THROW(quota_raw_ptr = &ctx.getQuota(););

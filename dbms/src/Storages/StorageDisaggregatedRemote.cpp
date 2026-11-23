@@ -499,8 +499,7 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
         *columns_to_read,
         enable_rs_filter,
         log,
-        db_context.getSettingsRef().dt_enable_trim_minmax,
-        db_context.getSettingsRef().dt_enable_decimal_rough_set_filter);
+        db_context.getSettingsRef().dt_enable_trim_minmax);
 }
 
 std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisaggregated::packSegmentReadTasks(

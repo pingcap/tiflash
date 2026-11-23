@@ -63,7 +63,7 @@ public:
 
     void setTimezoneInfo(const TimezoneInfo & timezone_info_);
 
-    void build(bool enable_decimal_rough_set_filter = true);
+    void build();
 
     void updateValues(const ColumnWithTypeAndName & values, const LoggerPtr & log);
 

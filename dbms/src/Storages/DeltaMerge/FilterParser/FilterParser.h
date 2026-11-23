@@ -44,8 +44,7 @@ public:
         const TiDB::ColumnInfos & scan_column_infos,
         AttrCreatorByColumnID && creator,
         const LoggerPtr & log,
-        bool enable_trim_minmax = false,
-        bool enable_decimal_rough_set_filter = true);
+        bool enable_trim_minmax = false);
 
     // only for runtime filter in predicate
     static RSOperatorPtr parseRFInExpr(
@@ -60,7 +59,7 @@ public:
         const TiDB::ColumnInfos & scan_column_infos,
         const ColumnDefines & table_column_defines);
 
-    static bool isRSFilterSupportType(Int32 field_type, bool enable_decimal_rough_set_filter = true);
+    static bool isRSFilterSupportType(Int32 field_type);
 
     /// Some helper structure
 
