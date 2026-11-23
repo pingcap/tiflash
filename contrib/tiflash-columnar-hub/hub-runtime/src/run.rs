@@ -36,7 +36,9 @@ use kvengine::{
     ia::util::IaConfig,
     table::{
         columnar::ColumnarFileCacheConfig,
-        fts::{FtsCacheConfig, FtsDeltaCacheConfig},
+        fts::{
+            FtsCacheConfig, FtsDeltaCacheConfig, FtsPreparedDocCache, FtsPreparedDocCacheConfig,
+        },
         sstable::BlockCache,
         vector_index::VectorIndexConfig,
     },
@@ -162,6 +164,8 @@ struct ConfigFile {
     columnar_file_cache: ColumnarFileCacheConfig,
     fts_cache: FtsCacheConfig,
     fts_delta_cache: FtsDeltaCacheConfig,
+    /// Startup-only shared cache for prepared fallback documents; disabled by default.
+    fts_prepared_doc_cache: FtsPreparedDocCacheConfig,
     block_cache_size: AbsoluteOrPercentSize,
     gc_interval: ReadableDuration,
     ia_meta_cap: AbsoluteOrPercentSize,
@@ -202,6 +206,7 @@ impl Default for ConfigFile {
             columnar_file_cache: ColumnarFileCacheConfig::default(),
             fts_cache: FtsCacheConfig::default(),
             fts_delta_cache: FtsDeltaCacheConfig::default(),
+            fts_prepared_doc_cache: FtsPreparedDocCacheConfig::default(),
             block_cache_size: AbsoluteOrPercentSize::default(),
             gc_interval: ReadableDuration::minutes(10),
             ia_meta_cap: AbsoluteOrPercentSize::Percent(10.0),
@@ -1412,6 +1417,16 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
     config.security.override_from_env();
     config.dfs.override_from_env();
     config.pd.validate().unwrap();
+    // Validate before --config-check succeeds or any remote services are contacted.
+    // This same instance is owned by CloudHelper and shared by all snapshots.
+    let fts_prepared_doc_cache = FtsPreparedDocCache::new(config.fts_prepared_doc_cache)
+        .unwrap_or_else(|err| panic!("invalid fts-prepared-doc-cache configuration: {}", err));
+    info!(
+        "FTS prepared document cache: enabled={}, cache_cap_bytes={}, max_entry_size_bytes={}",
+        fts_prepared_doc_cache.is_enabled(),
+        config.fts_prepared_doc_cache.cache_cap.as_memory_size(),
+        config.fts_prepared_doc_cache.max_entry_size.0,
+    );
 
     if matches.is_present("config-check") {
         println!("config check successful");
@@ -1488,6 +1503,7 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
         config.columnar_file_cache.clone(),
         config.fts_cache.clone(),
         config.fts_delta_cache.clone(),
+        fts_prepared_doc_cache,
         config.block_cache_size,
         config.schema_file_cache_max_keyspaces,
     );
@@ -1690,6 +1706,58 @@ log-level = "debug"
         assert_eq!(resolved.filename, "/tmp/tiflash-proxy.log");
         assert_eq!(resolved.level, slog::Level::Debug);
         assert_eq!(resolved.format, LogFormat::Text);
+    }
+
+    #[test]
+    fn test_prepared_doc_cache_defaults_to_disabled() {
+        let config: ConfigFile = toml::from_str("").unwrap();
+        assert_eq!(config.fts_prepared_doc_cache.cache_cap.as_memory_size(), 0);
+        assert!(!FtsPreparedDocCache::new(config.fts_prepared_doc_cache)
+            .unwrap()
+            .is_enabled());
+    }
+
+    #[test]
+    fn test_prepared_doc_cache_config_is_enabled_and_exposed_in_status() {
+        let config: ConfigFile = toml::from_str(
+            r#"
+[fts-prepared-doc-cache]
+cache-cap = "64MB"
+max-entry-size = "1MB"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.fts_prepared_doc_cache.cache_cap.as_memory_size(),
+            64 << 20
+        );
+        assert_eq!(config.fts_prepared_doc_cache.max_entry_size.0, 1 << 20);
+        assert!(FtsPreparedDocCache::new(config.fts_prepared_doc_cache)
+            .unwrap()
+            .is_enabled());
+        let status: serde_json::Value =
+            serde_json::from_str(&build_status_config_json(&config)).unwrap();
+        let roundtrip: FtsPreparedDocCacheConfig =
+            serde_json::from_value(status["fts-prepared-doc-cache"].clone()).unwrap();
+        assert_eq!(roundtrip, config.fts_prepared_doc_cache);
+    }
+
+    #[test]
+    fn test_prepared_doc_cache_rejects_zero_entry_limit_when_enabled() {
+        let config: ConfigFile = toml::from_str(
+            r#"
+[fts-prepared-doc-cache]
+cache-cap = "64MB"
+max-entry-size = "0B"
+"#,
+        )
+        .unwrap();
+        let error = FtsPreparedDocCache::new(config.fts_prepared_doc_cache)
+            .map(|_| ())
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("max-entry-size must be positive"));
     }
 
     #[test]
