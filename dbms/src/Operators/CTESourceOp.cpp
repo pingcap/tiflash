@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Operators/CTE.h>
 #include <Operators/CTEPartition.h>
@@ -34,6 +35,12 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
         if (this->cte_reader->getResp(this->resp))
             this->io_profile_info->remote_execution_summary.add(this->resp);
     case CTEOpStatus::OK:
+        // Blocks are produced by another MPP task and matched only by query_id_and_cte_id,
+        // so their schema must be checked against the header declared by this CTE source.
+        // Otherwise a mismatched producer block reaches downstream operators unchecked in
+        // release builds. The remote exchange path validates decoded blocks the same way.
+        if (block)
+            assertBlockSchema(this->getHeader(), block, "CTESourceOp");
         this->total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
     case CTEOpStatus::BLOCK_NOT_AVAILABLE:

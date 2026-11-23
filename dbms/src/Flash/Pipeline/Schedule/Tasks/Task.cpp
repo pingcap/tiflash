@@ -180,6 +180,7 @@ void Task::notify()
     diagnostic_thread_id.store(currentDiagnosticThreadId(), std::memory_order_relaxed);
     SCOPE_EXIT({ diagnostic_thread_id.store(0, std::memory_order_relaxed); });
     assert(task_status == ExecTaskStatus::WAIT_FOR_NOTIFY);
+    waiter.reset();
     auto next_status = notifyImpl();
     // If the query has been canceled,
     // move the task to WaitReactor to quickly trigger the cancel process.

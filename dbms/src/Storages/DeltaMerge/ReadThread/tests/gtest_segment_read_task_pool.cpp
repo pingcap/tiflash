@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/MemoryTrackerSetter.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/SimplePipelineTask.h>
 #include <Interpreters/Context.h>
+#include <Operators/ConcatSourceOp.h>
+#include <Operators/UnorderedSourceOp.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -108,6 +114,33 @@ protected:
             /*active_segment_limit_*/ 2,
             /*keyspace_id_*/ NullspaceID,
             /*res_group_name_*/ String{});
+    }
+
+    std::unique_ptr<UnorderedSourceOp> createRemoteSource(
+        PipelineExecutorContext & exec_context,
+        const SegmentReadTaskPoolPtr & pool)
+    {
+        return std::make_unique<UnorderedSourceOp>(
+            exec_context,
+            pool,
+            *tableColumns(),
+            MutSup::invalid_col_id,
+            "remote_source_stop_test",
+            RuntimeFilterList{},
+            0,
+            /*is_disagg_=*/true);
+    }
+
+    static SegmentReadTaskScheduler createPausedScheduler() { return SegmentReadTaskScheduler{false}; }
+
+    static void recordRemoteConnectionInfo(const SegmentReadTaskPoolPtr & pool)
+    {
+        const auto & task = pool->getTasks().begin()->second;
+        task->extra_remote_info.emplace();
+        auto & info = task->extra_remote_info->connection_profile_info;
+        info = ConnectionProfileInfo::createForInterZone();
+        info.bytes = 123;
+        pool->recordRemoteConnectionInfoIfNecessary(task);
     }
 
 
@@ -275,5 +308,73 @@ try
     schedulerBasic();
 }
 CATCH
+
+TEST_F(SegmentReadTasksPoolTest, PipelineStopBeforeRemoteReadInitialization)
+{
+    MemoryTrackerSetter tracker(true, nullptr);
+    for (bool whole_pipeline : {false, true})
+    {
+        SCOPED_TRACE(whole_pipeline);
+        PipelineExecutorContext exec_context;
+        auto pool = createSegmentReadTaskPool({1});
+        // Register with a scheduler without a worker thread, keeping the first read pending
+        // while SimplePipelineTask executes the real source prefix and suffix.
+        auto scheduler = createPausedScheduler();
+        std::call_once(pool->addToSchedulerFlag(), [&] { scheduler.add(pool); });
+        auto source = createRemoteSource(exec_context, pool);
+        auto source_profile = source->getIOProfileInfo();
+        auto remaining_source = createRemoteSource(exec_context, pool);
+        remaining_source->operatePrefix();
+        auto stop = std::make_shared<TaskStopSource>();
+        Block output;
+        PipelineExecBuilder builder;
+        builder.setSourceOp(std::move(source));
+        builder.setSinkOp(std::make_unique<SetBlockSinkOp>(exec_context, "", output));
+        builder.input_stops.push_back({stop, whole_pipeline ? std::nullopt : std::make_optional(size_t{0})});
+        SimplePipelineTask task(exec_context, "", builder.build(false));
+        ASSERT_GT(pool->getTotalReadTasks(), 0);
+        ASSERT_FALSE(pool->hasRemoteConnectionInfo());
+        ASSERT_FALSE(pool->getRemoteConnectionInfo().has_value());
+
+        stop->stop();
+        EXPECT_EQ(task.execute(), ExecTaskStatus::FINISHED);
+        task.finalize();
+        EXPECT_TRUE(exec_context.toExecutionResult().is_success) << exec_context.getExceptionMsg();
+        EXPECT_FALSE(exec_context.isCancelled());
+        EXPECT_FALSE(output);
+        EXPECT_EQ(source_profile->connection_profile_infos[0].bytes, 0);
+
+        // An early suffix without statistics must not consume the pool's shared once_flag.
+        recordRemoteConnectionInfo(pool);
+        ASSERT_TRUE(pool->hasRemoteConnectionInfo());
+        ASSERT_NO_THROW(remaining_source->operateSuffix());
+        EXPECT_EQ(remaining_source->getIOProfileInfo()->connection_profile_infos[0].bytes, 123);
+    }
+}
+
+TEST_F(SegmentReadTasksPoolTest, StoppedRemoteSourceCollectsAvailableConnectionInfo)
+{
+    PipelineExecutorContext exec_context;
+    auto pool = createSegmentReadTaskPool({1});
+    auto scheduler = createPausedScheduler();
+    std::call_once(pool->addToSchedulerFlag(), [&] { scheduler.add(pool); });
+    auto source = createRemoteSource(exec_context, pool);
+    source->operatePrefix();
+    recordRemoteConnectionInfo(pool);
+    source->onEarlyStop();
+    ASSERT_NO_THROW(source->operateSuffix());
+    EXPECT_EQ(source->getIOProfileInfo()->connection_profile_infos[0].bytes, 123);
+}
+
+TEST_F(SegmentReadTasksPoolTest, RemoteSourceRequiresConnectionInfoWithoutInputStop)
+{
+    PipelineExecutorContext exec_context;
+    auto pool = createSegmentReadTaskPool({1});
+    auto scheduler = createPausedScheduler();
+    std::call_once(pool->addToSchedulerFlag(), [&] { scheduler.add(pool); });
+    auto source = createRemoteSource(exec_context, pool);
+    source->operatePrefix();
+    EXPECT_THROW(source->operateSuffix(), DB::Exception);
+}
 
 } // namespace DB::DM::tests

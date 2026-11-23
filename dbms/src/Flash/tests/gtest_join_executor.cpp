@@ -17,6 +17,8 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/executeQuery.h>
 #include <Flash/tests/gtest_join.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTOrderByElement.h>
 
 #include <chrono>
 #include <future>
@@ -565,87 +567,103 @@ try
 
     context.context->setSetting("enable_resource_control", "true");
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(1)));
-    auto request = context.receive("probe", 2)
-                       .join(context.scan("limit_join", "build"), tipb::JoinType::TypeRightOuterJoin, {col("key")})
-                       .limit(1)
-                       .build(context);
+    for (bool constant_topn : {false, true})
+    {
+        auto builder = context.receive("probe", 2)
+                           .join(context.scan("limit_join", "build"), tipb::JoinType::TypeRightOuterJoin, {col("key")});
+        std::shared_ptr<tipb::DAGRequest> request;
+        if (constant_topn)
+        {
+            ASTPtr collation;
+            auto order_by = std::make_shared<ASTOrderByElement>(-1, -1, false, collation);
+            order_by->children.push_back(lit(Field(UInt64(1))));
+            auto order_by_items = std::make_shared<ASTExpressionList>();
+            order_by_items->children.push_back(order_by);
+            request = builder.topN(order_by_items, lit(Field(UInt64(1)))).build(context);
+        }
+        else
+            request = builder.limit(1).build(context);
 
-    DAGContext dagContext(*request, "pipeline_right_outer_join_limit", 2);
-    TiFlashTestEnv::setUpTestContext(*context.context, &dagContext, context.mockStorage(), TestType::EXECUTOR_TEST);
-    auto queryExecutor = queryExecute(*context.context, true);
-    ASSERT_EQ(dagContext.getExecutionMode(), ExecutionMode::Pipeline);
+        DAGContext dagContext(*request, "pipeline_right_outer_join_limit", 2);
+        TiFlashTestEnv::setUpTestContext(*context.context, &dagContext, context.mockStorage(), TestType::EXECUTOR_TEST);
+        auto queryExecutor = queryExecute(*context.context, true);
+        ASSERT_EQ(dagContext.getExecutionMode(), ExecutionMode::Pipeline);
 
-    // Keep the stream with data from reaching the probe input until the empty stream has reported probe completion.
-    auto stream_0_gate = SyncPointCtl::enableInScope("before_hash_join_probe_stream_0");
-    auto stream_1_finished = SyncPointCtl::enableInScope("after_hash_join_finish_one_probe_stream_1");
-    auto probe_stopped = SyncPointCtl::enableInScope("after_hash_join_probe_stop");
-    auto execution
-        = std::async(std::launch::async, [&queryExecutor]() { return queryExecutor->execute([](const Block &) {}); });
-
-    // This is only a watchdog. Sanitizer CI can delay an already scheduled pipeline event for over one second.
-    constexpr auto test_timeout = std::chrono::seconds(10);
-    auto waitForSyncPoint = [test_timeout](SyncPointScopeGuard & sync_point) {
-        std::promise<void> waiter_started;
-        auto waiter_started_future = waiter_started.get_future();
-        auto waiting = std::async(std::launch::async, [&sync_point, waiter = std::move(waiter_started)]() mutable {
-            waiter.set_value();
-            try
-            {
-                sync_point.waitAndPause();
-                return true;
-            }
-            catch (...)
-            {
-                return false;
-            }
+        // Keep the stream with data from reaching the probe input until the empty stream has reported probe completion.
+        auto stream_0_gate = SyncPointCtl::enableInScope("before_hash_join_probe_stream_0");
+        auto stream_1_finished = SyncPointCtl::enableInScope("after_hash_join_finish_one_probe_stream_1");
+        auto probe_stopped = SyncPointCtl::enableInScope("after_hash_join_probe_stop");
+        auto execution = std::async(std::launch::async, [&queryExecutor]() {
+            return queryExecutor->execute([](const Block &) {});
         });
-        waiter_started_future.wait();
-        if (waiting.wait_for(test_timeout) == std::future_status::ready)
-            return waiting.get();
 
-        // Closing the sync point releases a thread blocked in SyncPointCtl::sync().
-        sync_point.disable();
-        waiting.get();
-        return false;
-    };
+        // This is only a watchdog. Sanitizer CI can delay an already scheduled pipeline event for over one second.
+        constexpr auto test_timeout = std::chrono::seconds(10);
+        auto waitForSyncPoint = [test_timeout](SyncPointScopeGuard & sync_point) {
+            std::promise<void> waiter_started;
+            auto waiter_started_future = waiter_started.get_future();
+            auto waiting = std::async(std::launch::async, [&sync_point, waiter = std::move(waiter_started)]() mutable {
+                waiter.set_value();
+                try
+                {
+                    sync_point.waitAndPause();
+                    return true;
+                }
+                catch (...)
+                {
+                    return false;
+                }
+            });
+            waiter_started_future.wait();
+            if (waiting.wait_for(test_timeout) == std::future_status::ready)
+                return waiting.get();
 
-    auto cleanup = [&] {
+            // Closing the sync point releases a thread blocked in SyncPointCtl::sync().
+            sync_point.disable();
+            waiting.get();
+            return false;
+        };
+
+        auto cleanup = [&] {
+            stream_0_gate.disable();
+            stream_1_finished.disable();
+            probe_stopped.disable();
+            queryExecutor->cancel();
+            execution.get();
+        };
+
+        // The empty stream has now decremented pending_probe_streams and is held before it can continue.
+        if (!waitForSyncPoint(stream_1_finished))
+        {
+            cleanup();
+            FAIL() << "The empty probe stream did not reach finishOneProbe().";
+        }
+        // Confirm that stream 0 has acquired the sync channels before disabling the input gate.
+        if (!waitForSyncPoint(stream_0_gate))
+        {
+            cleanup();
+            FAIL() << "The data probe stream did not reach the input gate.";
+        }
         stream_0_gate.disable();
-        stream_1_finished.disable();
+
+        // The data stream reaches LIMIT and publishes the shared stop state before the empty stream is released.
+        if (!waitForSyncPoint(probe_stopped))
+        {
+            cleanup();
+            FAIL() << "The data probe stream did not publish probe stop after LIMIT.";
+        }
+        // Other stopped probe operators may also run their suffix. The ordering is established now,
+        // so release this gate for all streams before allowing the empty stream to continue.
         probe_stopped.disable();
-        queryExecutor->cancel();
-        execution.get();
-    };
+        stream_1_finished.next();
 
-    // The empty stream has now decremented pending_probe_streams and is held before it can continue.
-    if (!waitForSyncPoint(stream_1_finished))
-    {
-        cleanup();
-        FAIL() << "The empty probe stream did not reach finishOneProbe().";
+        if (execution.wait_for(test_timeout) != std::future_status::ready)
+        {
+            cleanup();
+            FAIL() << "Pipeline execution did not finish after the hash join probe stop.";
+        }
+        ASSERT_TRUE(execution.get().is_success);
     }
-    // Confirm that stream 0 has acquired the sync channels before disabling the input gate.
-    if (!waitForSyncPoint(stream_0_gate))
-    {
-        cleanup();
-        FAIL() << "The data probe stream did not reach the input gate.";
-    }
-    stream_0_gate.disable();
-
-    // The data stream reaches LIMIT and publishes the shared stop state before the empty stream is released.
-    if (!waitForSyncPoint(probe_stopped))
-    {
-        cleanup();
-        FAIL() << "The data probe stream did not publish probe stop after LIMIT.";
-    }
-    probe_stopped.next();
-    stream_1_finished.next();
-
-    if (execution.wait_for(test_timeout) != std::future_status::ready)
-    {
-        cleanup();
-        FAIL() << "Pipeline execution did not finish after the hash join probe stop.";
-    }
-    ASSERT_TRUE(execution.get().is_success);
 }
 CATCH
 #endif

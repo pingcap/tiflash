@@ -34,12 +34,14 @@
 #include <boost/noncopyable.hpp>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 namespace DB
 {
 class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 class DAGContext;
+class CTE;
 class ProcessListEntry;
 class QueryOperatorSpillContexts;
 
@@ -161,6 +163,21 @@ private:
     String getResourceGroupName() const { return meta.resource_group_name(); }
 
 private:
+    struct CTEPublication
+    {
+        bool is_sink;
+        size_t cte_id;
+    };
+
+    /// Reserve storage for one publication before the CTE is created, so that recording the
+    /// publication in publishCTE() cannot throw after the CTE has been exposed to abortCTE().
+    void reserveCTEPublication();
+
+    /// Record a CTE that has been published to dag_context. If the task has already been
+    /// aborted, notify and release it immediately instead. Together with abortCTE() this
+    /// guarantees every published CTE is notified and released exactly once.
+    void publishCTE(bool is_sink, size_t cte_id, const std::shared_ptr<CTE> & cte);
+
     struct ProcessListEntryHolder
     {
         std::shared_ptr<ProcessListEntry> process_list_entry;
@@ -207,8 +224,14 @@ private:
     MPPReceiverSetPtr receiver_set;
 
     std::atomic<bool> has_cte_sink = false;
-    std::atomic<bool> has_cte_source = false;
     bool notify_cte_sink_finish = false;
+
+    /// Serialize CTE publication with abortCTE() so that an abort can never miss a CTE
+    /// that has already been added to dag_context.
+    mutable std::mutex cte_mtx;
+    bool cte_aborted = false;
+    String cte_abort_message;
+    std::vector<CTEPublication> cte_publications;
 
     int new_thread_count_of_mpp_receiver = 0;
 

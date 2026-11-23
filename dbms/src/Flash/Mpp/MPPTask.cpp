@@ -212,20 +212,68 @@ void MPPTask::abortQueryExecutor()
 // or the CTESource will hang
 void MPPTask::abortCTE(const String & message)
 {
-    if (this->has_cte_sink.load())
+    std::vector<CTEPublication> publications;
     {
-        this->dag_context->getCTESink()->notifyCancel<false>(message);
-        this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEIDForSink());
+        std::lock_guard lock(cte_mtx);
+        if (cte_aborted)
+            return;
+        cte_aborted = true;
+        cte_abort_message = message;
+        publications.swap(cte_publications);
     }
+    if (publications.empty())
+        return;
 
-    if (this->has_cte_source.load())
+    const auto sink = dag_context->getCTESink();
+    const auto sink_key = dag_context->getQueryIDAndCTEIDForSink();
+    const auto sources = dag_context->getCTESource();
+    for (const auto & publication : publications)
     {
-        for (auto & p : this->dag_context->getCTESource())
+        if (publication.is_sink)
         {
-            p.second->notifyCancel<false>(message);
-            this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEIDForSource(p.first));
+            if (sink)
+            {
+                sink->notifyCancel<false>(message);
+                context->getCTEManager()->releaseCTE(sink_key);
+            }
+            continue;
+        }
+
+        auto iter = sources.find(publication.cte_id);
+        if (iter != sources.end())
+        {
+            iter->second->notifyCancel<false>(message);
+            context->getCTEManager()->releaseCTE(dag_context->getQueryIDAndCTEIDForSource(publication.cte_id));
         }
     }
+}
+
+void MPPTask::reserveCTEPublication()
+{
+    std::lock_guard lock(cte_mtx);
+    cte_publications.reserve(cte_publications.size() + 1);
+}
+
+void MPPTask::publishCTE(bool is_sink, size_t cte_id, const std::shared_ptr<CTE> & cte)
+{
+    String abort_message;
+    {
+        std::lock_guard lock(cte_mtx);
+        if (!cte_aborted)
+        {
+            // Capacity is reserved before the CTE is exposed, so recording the publication
+            // cannot throw and leave an unreleased CTE behind.
+            cte_publications.push_back(CTEPublication{is_sink, cte_id});
+            return;
+        }
+        abort_message = cte_abort_message;
+    }
+
+    // The task was aborted while this CTE was being published, so abortCTE() could not see
+    // it. Notify and release it here instead, which keeps the cleanup exactly-once.
+    cte->notifyCancel<false>(abort_message);
+    context->getCTEManager()->releaseCTE(
+        is_sink ? dag_context->getQueryIDAndCTEIDForSink() : dag_context->getQueryIDAndCTEIDForSource(cte_id));
 }
 
 void MPPTask::finishWrite()
@@ -328,11 +376,11 @@ void MPPTask::registerCTESink()
         dag_context->dag_request.rootExecutor().has_cte_sink(),
         "Task should has either exchange sender or cte sink");
 
-    this->has_cte_sink.store(true);
     const auto & cte_sink = dag_context->dag_request.rootExecutor().cte_sink();
     String query_id_and_cte_id
         = fmt::format("{}_{}", context->getDAGContext()->getMPPTaskId().getQueryID(), cte_sink.cte_id());
     context->getDAGContext()->setQueryIDAndCTEIDForSink(query_id_and_cte_id);
+    reserveCTEPublication();
     auto cte = context->getCTEManager()->getOrCreateCTE(
         query_id_and_cte_id,
         context->getMaxStreams(),
@@ -340,6 +388,10 @@ void MPPTask::registerCTESink()
         cte_sink.cte_source_num());
     cte->registerSink();
     context->getDAGContext()->setCTESink(cte);
+    this->has_cte_sink.store(true);
+    // Publish only after the CTE sink is fully initialized, so that a cancellation between
+    // setCTESink() and this point is detected by publishCTE() instead of being missed.
+    publishCTE(true, 0, cte);
 }
 
 bool MPPTask::initExchangeReceivers()
@@ -407,17 +459,20 @@ void MPPTask::initCTESources()
     dag_context->dag_request.traverse([&](const tipb::Executor & executor) {
         if (executor.tp() == tipb::ExecType::TypeCTESource)
         {
-            this->has_cte_source.store(true);
             const auto & cte_source = executor.cte_source();
             String query_id_and_cte_id
                 = fmt::format("{}_{}", context->getDAGContext()->getMPPTaskId().getQueryID(), cte_source.cte_id());
             context->getDAGContext()->addQueryIDAndCTEIDForSource(cte_source.cte_id(), query_id_and_cte_id);
+            reserveCTEPublication();
             auto cte = context->getCTEManager()->getOrCreateCTE(
                 query_id_and_cte_id,
                 context->getMaxStreams(),
                 cte_source.cte_sink_num(),
                 cte_source.cte_source_num());
             context->getDAGContext()->addCTESource(cte_source.cte_id(), cte);
+            // Publish only after the CTE source is fully initialized, so that a cancellation
+            // between addCTESource() and this point is detected by publishCTE().
+            publishCTE(false, cte_source.cte_id(), cte);
         }
         return true;
     });

@@ -72,6 +72,8 @@ public:
 protected:
     String describePipelineOperators() const { return pipeline_exec->describeOperators(); }
 
+    TaskStopSources getPipelineNotifyStopSources() const { return pipeline_exec->getNotifyStopSources(); }
+
     ExecTaskStatus runExecute()
     {
         assert(pipeline_exec);
