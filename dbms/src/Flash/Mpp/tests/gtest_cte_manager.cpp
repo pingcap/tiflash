@@ -66,6 +66,32 @@ try
 }
 CATCH
 
+TEST_F(TestCTEManager, InvalidExpectedTaskNum)
+try
+{
+    CTEManager manager;
+    const String query_id_and_cte_id = "pingcap";
+    constexpr Int32 concurrency = 2;
+    constexpr Int32 max_expected_task_num = static_cast<Int32>(CTE::MAX_EXPECTED_TASK_NUM);
+
+    // Zero, negative values (uint32 values that do not fit into Int32) and values beyond
+    // the Int16 refcount range must be rejected before any state is allocated.
+    ASSERT_THROW(manager.getOrCreateCTE(query_id_and_cte_id, concurrency, 0, 1), DB::Exception);
+    ASSERT_THROW(manager.getOrCreateCTE(query_id_and_cte_id, concurrency, 1, 0), DB::Exception);
+    ASSERT_THROW(manager.getOrCreateCTE(query_id_and_cte_id, concurrency, -1, 1), DB::Exception);
+    ASSERT_THROW(manager.getOrCreateCTE(query_id_and_cte_id, concurrency, 1, -1), DB::Exception);
+    ASSERT_THROW(manager.getOrCreateCTE(query_id_and_cte_id, concurrency, max_expected_task_num + 1, 1), DB::Exception);
+    ASSERT_THROW(manager.getOrCreateCTE(query_id_and_cte_id, concurrency, 1, max_expected_task_num + 1), DB::Exception);
+    ASSERT_FALSE(manager.hasCTEForTest(query_id_and_cte_id));
+
+    // The upper bound itself is still valid.
+    auto cte = manager.getOrCreateCTE(query_id_and_cte_id, concurrency, max_expected_task_num, max_expected_task_num);
+    ASSERT_NE(cte, nullptr);
+    manager.releaseCTE(query_id_and_cte_id);
+    ASSERT_FALSE(manager.hasCTEForTest(query_id_and_cte_id));
+}
+CATCH
+
 TEST_F(TestCTEManager, Concurrent)
 try
 {

@@ -38,6 +38,94 @@ public:
     }
 };
 
+<<<<<<< HEAD
+=======
+TEST_F(ExpandExecutorTestRunner, Expand2ProjectionValidation)
+try
+{
+    const std::vector<std::pair<String, std::function<void(tipb::Expand2 &)>>> invalidCases{
+        {"missing projections",
+         [](auto & expand) {
+             expand.clear_proj_exprs();
+         }},
+        {"empty first level",
+         [](auto & expand) {
+             expand.mutable_proj_exprs(0)->clear_exprs();
+         }},
+        {"empty second level",
+         [](auto & expand) {
+             expand.mutable_proj_exprs(1)->clear_exprs();
+         }},
+        {"shorter second level",
+         [](auto & expand) {
+             expand.mutable_proj_exprs(1)->mutable_exprs()->RemoveLast();
+         }},
+        {"longer second level",
+         [](auto & expand) {
+             auto extraExpr = expand.proj_exprs(1).exprs(0);
+             *expand.mutable_proj_exprs(1)->add_exprs() = extraExpr;
+         }},
+        {"missing generated name",
+         [](auto & expand) {
+             expand.clear_generated_output_names();
+         }},
+    };
+
+    for (bool pipeline : {false, true})
+    {
+        SCOPED_TRACE(pipeline);
+        enablePipeline(pipeline);
+        ASSERT_COLUMNS_EQ_UR(
+            (ColumnsWithTypeAndName{toVec<UInt64>({1, 2})}),
+            executeStreams(buildExpand2ValidationRequest()));
+        for (const auto & [name, invalidate] : invalidCases)
+        {
+            SCOPED_TRACE(name);
+            auto request = buildExpand2ValidationRequest();
+            // The outer Projection supplies output types, so the planner must validate Expand2 independently.
+            auto * expand = request->mutable_root_executor()->mutable_projection()->mutable_child()->mutable_expand2();
+            invalidate(*expand);
+            try
+            {
+                executeStreams(request);
+                ADD_FAILURE() << "Expected malformed Expand2 projections to be rejected";
+            }
+            catch (const TiFlashException & e)
+            {
+                EXPECT_TRUE(e.getError().is(Errors::Planner::BadRequest)) << e.standardText();
+            }
+        }
+    }
+}
+CATCH
+
+TEST_F(ExpandExecutorTestRunner, ExpandRejectsEmptyGroupingSet)
+try
+{
+    for (bool pipeline : {false, true})
+    {
+        SCOPED_TRACE(pipeline);
+        enablePipeline(pipeline);
+        auto request = context.scan("test_db", "test_table")
+                           .expand(MockVVecColumnNameVec{
+                               MockVecColumnNameVec{},
+                               MockVecColumnNameVec{MockColumnNameVec{"s1"}},
+                           })
+                           .build(context);
+        try
+        {
+            executeStreams(request);
+            ADD_FAILURE() << "Expected malformed Expand grouping set to be rejected";
+        }
+        catch (const TiFlashException & e)
+        {
+            EXPECT_TRUE(e.getError().is(Errors::Planner::BadRequest)) << e.standardText();
+        }
+    }
+}
+CATCH
+
+>>>>>>> e4cdfbb80c (security: harden MPP wire input validation and resource group isolation (#11363))
 TEST_F(ExpandExecutorTestRunner, Expand2Logical)
 try
 {
