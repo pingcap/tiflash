@@ -42,6 +42,15 @@ PhysicalPlanNodePtr PhysicalExpand::build(
         //should not reach here
         throw TiFlashException("Expand executor without grouping sets", Errors::Planner::BadRequest);
     }
+    for (const auto & grouping_set : expand.grouping_sets())
+    {
+        // Expand assumes each grouping set contains at least one grouping exprs when
+        // expanding blocks, so reject malformed requests during plan building.
+        if (unlikely(grouping_set.grouping_exprs().empty()))
+        {
+            throw TiFlashException("Expand grouping set without grouping exprs", Errors::Planner::BadRequest);
+        }
+    }
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr before_expand_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());

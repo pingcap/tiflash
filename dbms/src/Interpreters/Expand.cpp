@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnUtils.h>
+#include <Common/Exception.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Expand.h>
@@ -24,6 +25,11 @@ namespace DB
 Expand::Expand(const DB::GroupingSets & gss)
     : group_sets_names(gss)
 {
+    RUNTIME_CHECK_MSG(!group_sets_names.empty(), "Expand requires at least one grouping set");
+    for (const auto & grouping_set : group_sets_names)
+    {
+        RUNTIME_CHECK_MSG(!grouping_set.empty(), "Expand grouping set requires at least one grouping exprs");
+    }
     collectNameSet();
 }
 

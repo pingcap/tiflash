@@ -437,6 +437,25 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
             task->id.gather_id.query_id,
             task->id.gather_id.hasMeaningfulGatherId(),
             task->context->getSettingsRef().auto_spill_check_min_interval_ms);
+    /// Enforce one resource group per query: the first registered task establishes the
+    /// canonical group, and any later task with a different group is rejected here, before
+    /// it can reach the scheduler, tunnels or CTEs. This keeps scheduler thread accounting
+    /// and tunnel lookup within a single group even though the group is not part of the
+    /// query identity.
+    if (query->resource_group_name.has_value())
+    {
+        if (*query->resource_group_name != task->id.gather_id.query_id.resource_group_name)
+            return {
+                false,
+                fmt::format(
+                    "task resource group name '{}' does not match the query's resource group name '{}'",
+                    task->id.gather_id.query_id.resource_group_name,
+                    *query->resource_group_name)};
+    }
+    else
+    {
+        query->resource_group_name = task->id.gather_id.query_id.resource_group_name;
+    }
     if (query->process_list_entry == nullptr)
     {
         query->process_list_entry = setProcessListElement(

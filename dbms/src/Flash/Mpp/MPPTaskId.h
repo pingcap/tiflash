@@ -27,6 +27,10 @@ struct MPPQueryId
     UInt64 local_query_id;
     UInt64 server_id;
     UInt64 start_ts;
+    /// A query attribute rather than part of the query identity: operator==, hash and
+    /// operator< ignore it, so that task metas with and without the group (e.g. encoded
+    /// exchange metas) refer to the same query. MPPTaskManager::registerTask enforces
+    /// that all tasks of one query use the same resource group name.
     String resource_group_name;
     UInt64 connection_id;
     String connection_alias;
@@ -64,11 +68,12 @@ struct MPPQueryId
     String toString() const
     {
         return fmt::format(
-            "<query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}>",
+            "<query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}, resource_group_name:{}>",
             query_ts,
             local_query_id,
             server_id,
-            start_ts);
+            start_ts,
+            resource_group_name);
     }
 };
 
@@ -111,12 +116,13 @@ struct MPPGatherId
     inline String toString() const
     {
         return fmt::format(
-            "gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}",
+            "gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}, resource_group_name:{}",
             this->gather_id,
             query_id.query_ts,
             query_id.local_query_id,
             query_id.server_id,
-            query_id.start_ts);
+            query_id.start_ts,
+            query_id.resource_group_name);
     }
 
     bool hasMeaningfulGatherId() const { return gather_id > 0; }
