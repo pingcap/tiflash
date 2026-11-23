@@ -17,6 +17,38 @@
 
 using namespace DB;
 
+namespace
+{
+struct AllocationAttempt
+{
+};
+
+struct ThrowingAllocator : Allocator<false>
+{
+    void * alloc(size_t /*bytes*/) { throw AllocationAttempt{}; }
+};
+
+template <typename Array>
+void checkAllocationLimits()
+{
+    // Probe the actual allocation path without requesting the enormous boundary allocations.
+    EXPECT_THROW((Array(Array::maxAllocSize())), AllocationAttempt);
+    EXPECT_THROW((Array(Array::maxAllocSize() + 1)), Exception);
+
+    Array array;
+    EXPECT_THROW(array.reserve(Array::maxReserveSize()), AllocationAttempt);
+    EXPECT_THROW(array.reserve(Array::maxReserveSize() + 1), Exception);
+}
+} // namespace
+
+TEST(Common, PODArrayAllocationLimitsMatchPrechecks)
+{
+    checkAllocationLimits<PaddedPODArray<UInt8, 4096, ThrowingAllocator>>();
+    checkAllocationLimits<PaddedPODArray<UInt32, 4096, ThrowingAllocator>>();
+    checkAllocationLimits<PaddedPODArray<UInt64, 4096, ThrowingAllocator>>();
+    checkAllocationLimits<PODArray<UInt32, 4096, ThrowingAllocator>>();
+}
+
 TEST(Common, PODArrayInsert)
 {
     std::string str = "test_string_abacaba";
