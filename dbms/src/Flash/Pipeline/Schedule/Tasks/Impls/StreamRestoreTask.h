@@ -32,7 +32,10 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const BlockInputStreamPtr & stream_,
-        const SharedQueueSinkHolderPtr & sink_);
+        const SharedQueueSinkHolderPtr & sink_,
+        TaskStopSourcePtr stop_source_ = {});
+
+    TaskStopSources getNotifyStopSources() const override;
 
 protected:
     ExecTaskStatus executeImpl() override;
@@ -49,6 +52,7 @@ private:
 private:
     BlockInputStreamPtr stream;
     SharedQueueSinkHolderPtr sink;
+    const TaskStopSourcePtr stop_source;
 
     Block t_block;
     bool is_done = false;

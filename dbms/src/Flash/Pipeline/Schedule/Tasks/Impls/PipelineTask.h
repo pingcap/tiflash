@@ -35,6 +35,8 @@ public:
     {}
 
 protected:
+    TaskStopSources getNotifyStopSources() const override { return getPipelineNotifyStopSources(); }
+
     ExecTaskStatus executeImpl() override { return runExecute(); }
 
     ExecTaskStatus executeIOImpl() override { return runExecuteIO(); }
