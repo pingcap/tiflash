@@ -18,6 +18,9 @@ tikv_util = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", bra
 url = { version = "2", default-features = true }
 
 [patch.crates-io]
+# Match CSE's grpcio source, including its native memory-reclaimer fix.
+grpcio = { git = "https://github.com/tikv/grpc-rs", branch = "cse" }
+grpcio-sys = { git = "https://github.com/tikv/grpc-rs", branch = "cse" }
 raft = { git = "https://github.com/tikv/raft-rs", branch = "master" }
 raft-proto = { git = "https://github.com/tikv/raft-rs", branch = "master" }
 protobuf = { git = "https://github.com/pingcap/rust-protobuf", branch = "v2.8" }
