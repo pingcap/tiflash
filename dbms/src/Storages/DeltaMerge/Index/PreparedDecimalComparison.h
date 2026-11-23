@@ -66,9 +66,8 @@ auto prepareDecimalComparison(const DecimalField<Left> & value, ScaleType column
     if (value_scale < column_scale)
     {
         const auto multiplier = getScaleMultiplier<CompareInt>(column_scale - value_scale);
-        const int sign = boost::math::sign(constant);
         if (common::mulOverflow(constant, multiplier, constant))
-            constant_overflow_sign = sign;
+            constant_overflow_sign = boost::math::sign(static_cast<CompareInt>(value.getValue()));
     }
     return func(PreparedDecimalComparison<CompareInt, false>{constant, 1, constant_overflow_sign});
 }
