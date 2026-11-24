@@ -735,7 +735,7 @@ grpc::Status FlashService::CancelMPPTask(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
-    LOG_INFO(log, "cancel mpp task request: {}", request->DebugString());
+    LOG_INFO(log, "cancel mpp task request, peer={}: {}", grpc_context->peer(), request->DebugString());
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())

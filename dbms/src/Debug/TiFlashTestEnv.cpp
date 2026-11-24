@@ -22,6 +22,7 @@
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
+#include <Poco/SplitterChannel.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
@@ -231,7 +232,10 @@ void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os, bool e
     else
         formatter = new UnifiedLogFormatter<false>();
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-    Poco::Logger::root().setChannel(formatting_channel);
+    // Tests may attach collectors while background workers are logging.
+    Poco::AutoPtr<Poco::SplitterChannel> splitter = new Poco::SplitterChannel;
+    splitter->addChannel(formatting_channel);
+    Poco::Logger::root().setChannel(splitter);
     Poco::Logger::root().setLevel(level);
 }
 

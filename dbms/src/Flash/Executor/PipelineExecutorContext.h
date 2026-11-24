@@ -25,8 +25,10 @@
 #include <Storages/KVStore/Types.h>
 
 #include <atomic>
+#include <chrono>
 #include <exception>
 #include <mutex>
+#include <unordered_map>
 
 namespace DB
 {
@@ -39,11 +41,18 @@ using SharedQueuePtr = std::shared_ptr<SharedQueue>;
 class OneTimeNotifyFuture;
 using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
 class DAGContext;
+class Task;
 
 class PipelineExecutorContext : private boost::noncopyable
 {
 public:
     static constexpr auto timeout_err_msg = "error with timeout";
+    static constexpr std::chrono::milliseconds default_drain_warning_initial_interval = std::chrono::seconds(30);
+    static constexpr std::chrono::milliseconds default_drain_warning_max_interval = std::chrono::seconds(300);
+
+    static std::chrono::milliseconds nextDrainWarningInterval(
+        std::chrono::milliseconds current_interval,
+        std::chrono::milliseconds max_interval = default_drain_warning_max_interval);
 
     // Only used for unit test.
     PipelineExecutorContext()
@@ -82,6 +91,11 @@ public:
 
     void decActiveRefCount();
 
+    void registerTask(const Task * task);
+    void unregisterTask(const Task * task);
+    void describeTask(const Task * task, String operators);
+    String dumpActiveTasks();
+
     void onErrorOccurred(const String & err_msg);
     void onErrorOccurred(const std::exception_ptr & exception_ptr_);
 
@@ -108,6 +122,10 @@ public:
     void consume(ResultHandler & result_handler);
 
     void cancel();
+
+    // Callbacks must be non-blocking and must not throw. Registration racing
+    // with cancellation runs the callback immediately, outside mu.
+    void addCancellationCallback(std::function<void()> callback);
 
     ALWAYS_INLINE bool isCancelled() const { return is_cancelled.load(std::memory_order_acquire); }
 
@@ -146,6 +164,14 @@ public:
 
     void addOneTimeFuture(const OneTimeNotifyFuturePtr & future);
 
+    // Only used for unit test.
+    void setDrainWarningIntervalsForTest(
+        std::chrono::milliseconds initial_interval,
+        std::chrono::milliseconds max_interval);
+
+    // Only used for unit test.
+    UInt64 getDrainWarningCountForTest();
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -161,6 +187,8 @@ private:
     void cancelOneTimeFutures();
 
     void cancelResultQueueIfNeed();
+    void waitForDrain(std::unique_lock<std::mutex> & lock);
+    String dumpActiveTasksLocked(size_t limit);
 
 private:
     const String query_id;
@@ -196,5 +224,11 @@ private:
     std::vector<SharedQueuePtr> shared_queues;
 
     std::vector<OneTimeNotifyFuturePtr> one_time_futures;
+    std::vector<std::function<void()>> cancellation_callbacks;
+    std::unordered_map<const Task *, String> active_tasks;
+    std::chrono::steady_clock::time_point cancelled_at;
+    std::chrono::milliseconds drain_warning_initial_interval{default_drain_warning_initial_interval};
+    std::chrono::milliseconds drain_warning_max_interval{default_drain_warning_max_interval};
+    UInt64 drain_warning_count{0};
 };
 } // namespace DB

@@ -32,7 +32,9 @@ public:
         PipelineExecPtr && pipeline_exec_)
         : EventTask(exec_context_, req_id, event_, ExecTaskStatus::RUNNING)
         , PipelineTaskBase(std::move(pipeline_exec_))
-    {}
+    {
+        describeOperators(describePipelineOperators());
+    }
 
 protected:
     TaskStopSources getNotifyStopSources() const override { return getPipelineNotifyStopSources(); }

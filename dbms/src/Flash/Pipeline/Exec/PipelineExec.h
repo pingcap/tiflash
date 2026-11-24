@@ -48,6 +48,7 @@ public:
 
     void executePrefix();
     void executeSuffix();
+    String describeOperators() const;
 
     OperatorStatus execute();
 
