@@ -206,16 +206,50 @@ String PipelineExecutorContext::dumpActiveTasks()
     return dumpActiveTasksLocked(std::numeric_limits<size_t>::max());
 }
 
+std::chrono::milliseconds PipelineExecutorContext::nextDrainWarningInterval(
+    std::chrono::milliseconds current_interval,
+    std::chrono::milliseconds max_interval)
+{
+    if (current_interval <= std::chrono::milliseconds::zero() || current_interval >= max_interval)
+        return max_interval;
+    if (current_interval > max_interval / 2)
+        return max_interval;
+    return current_interval * 2;
+}
+
+void PipelineExecutorContext::setDrainWarningIntervalsForTest(
+    std::chrono::milliseconds initial_interval,
+    std::chrono::milliseconds max_interval)
+{
+    RUNTIME_ASSERT(initial_interval > std::chrono::milliseconds::zero());
+    RUNTIME_ASSERT(max_interval >= initial_interval);
+    std::lock_guard lock(mu);
+    drain_warning_initial_interval = initial_interval;
+    drain_warning_max_interval = max_interval;
+}
+
+UInt64 PipelineExecutorContext::getDrainWarningCountForTest()
+{
+    std::lock_guard lock(mu);
+    return drain_warning_count;
+}
+
 void PipelineExecutorContext::waitForDrain(std::unique_lock<std::mutex> & lock)
 {
     cv.wait(lock, [&] { return active_ref_count == 0 || cancelled_at != std::chrono::steady_clock::time_point{}; });
-    auto next_warning = cancelled_at + std::chrono::seconds(30);
+    if (active_ref_count == 0)
+        return;
+    auto warning_interval = drain_warning_initial_interval;
+    const auto max_warning_interval = drain_warning_max_interval;
+    auto next_warning = cancelled_at + warning_interval;
     while (active_ref_count != 0)
     {
         if (cv.wait_until(lock, next_warning, [&] { return active_ref_count == 0; }))
             break;
+        ++drain_warning_count;
         const auto elapsed
             = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - cancelled_at).count();
+        warning_interval = nextDrainWarningInterval(warning_interval, max_warning_interval);
         try
         {
             auto dump = dumpActiveTasksLocked(32);
@@ -232,7 +266,7 @@ void PipelineExecutorContext::waitForDrain(std::unique_lock<std::mutex> & lock)
             // Diagnostics may fail under memory pressure. Never leave wait()
             // while workers can still access the executor or query context.
         }
-        next_warning = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        next_warning = std::chrono::steady_clock::now() + warning_interval;
     }
 }
 

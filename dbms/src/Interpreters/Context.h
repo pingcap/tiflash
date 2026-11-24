@@ -181,9 +181,6 @@ private:
     TimezoneInfo timezone_info;
 
     DAGContext * dag_context = nullptr;
-    CancellationHook is_cancelled{[]() {
-        return false;
-    }};
     std::shared_ptr<CancellationSource> cancellation_source;
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
@@ -374,8 +371,7 @@ public:
     void setDAGContext(DAGContext * dag_context);
     DAGContext * getDAGContext() const;
 
-    bool isCancelled() const { return (cancellation_source && cancellation_source->isCancelled()) || is_cancelled(); }
-    void setCancellationHook(CancellationHook cancellation_hook) { is_cancelled = cancellation_hook; }
+    bool isCancelled() const { return cancellation_source && cancellation_source->isCancelled(); }
     void setCancellationSource(std::shared_ptr<CancellationSource> source) { cancellation_source = std::move(source); }
     void addCancellationCallback(std::function<void()> callback) const
     {

@@ -25,6 +25,7 @@
 #include <Storages/KVStore/Types.h>
 
 #include <atomic>
+#include <chrono>
 #include <exception>
 #include <mutex>
 #include <unordered_map>
@@ -46,6 +47,12 @@ class PipelineExecutorContext : private boost::noncopyable
 {
 public:
     static constexpr auto timeout_err_msg = "error with timeout";
+    static constexpr std::chrono::milliseconds default_drain_warning_initial_interval = std::chrono::seconds(30);
+    static constexpr std::chrono::milliseconds default_drain_warning_max_interval = std::chrono::seconds(300);
+
+    static std::chrono::milliseconds nextDrainWarningInterval(
+        std::chrono::milliseconds current_interval,
+        std::chrono::milliseconds max_interval = default_drain_warning_max_interval);
 
     // Only used for unit test.
     PipelineExecutorContext()
@@ -157,6 +164,14 @@ public:
 
     void addOneTimeFuture(const OneTimeNotifyFuturePtr & future);
 
+    // Only used for unit test.
+    void setDrainWarningIntervalsForTest(
+        std::chrono::milliseconds initial_interval,
+        std::chrono::milliseconds max_interval);
+
+    // Only used for unit test.
+    UInt64 getDrainWarningCountForTest();
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -212,5 +227,8 @@ private:
     std::vector<std::function<void()>> cancellation_callbacks;
     std::unordered_map<const Task *, String> active_tasks;
     std::chrono::steady_clock::time_point cancelled_at;
+    std::chrono::milliseconds drain_warning_initial_interval{default_drain_warning_initial_interval};
+    std::chrono::milliseconds drain_warning_max_interval{default_drain_warning_max_interval};
+    UInt64 drain_warning_count{0};
 };
 } // namespace DB

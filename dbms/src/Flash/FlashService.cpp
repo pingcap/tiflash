@@ -769,13 +769,6 @@ grpc::Status FlashService::CancelMPPTask(
         MPPGatherId(request->meta()),
         "Receive cancel request from TiDB",
         AbortType::ONCANCELLATION);
-    LOG_INFO(
-        log,
-        "CancelMPPTask accepted, peer={} target={} gather={} elapsed_ms={}, executor drain is asynchronous",
-        grpc_context->peer(),
-        request->meta().address(),
-        MPPGatherId(request->meta()).toString(),
-        watch.elapsedMilliseconds());
     return grpc::Status::OK;
 }
 

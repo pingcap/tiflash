@@ -27,9 +27,11 @@ namespace DB::tests
 TEST(PipelineCancellationTest, RequestCancellationSurvivesContextCopyAndLateRegistration)
 {
     auto context = TiFlashTestEnv::getContext();
+    EXPECT_FALSE(context->isCancelled());
     auto cancellation = std::make_shared<CancellationSource>();
     context->setCancellationSource(cancellation);
     Context copy(*context);
+    EXPECT_FALSE(copy.isCancelled());
     size_t calls = 0;
     copy.addCancellationCallback([&] {
         EXPECT_TRUE(copy.isCancelled());
@@ -42,6 +44,75 @@ TEST(PipelineCancellationTest, RequestCancellationSurvivesContextCopyAndLateRegi
     EXPECT_EQ(calls, 2);
     copy.addCancellationCallback([&] { ++calls; });
     EXPECT_EQ(calls, 3);
+}
+
+TEST(PipelineCancellationTest, DrainWarningIntervalBackoff)
+{
+    auto interval = PipelineExecutorContext::default_drain_warning_initial_interval;
+    EXPECT_EQ(interval, std::chrono::seconds(30));
+
+    interval = PipelineExecutorContext::nextDrainWarningInterval(interval);
+    EXPECT_EQ(interval, std::chrono::seconds(60));
+    interval = PipelineExecutorContext::nextDrainWarningInterval(interval);
+    EXPECT_EQ(interval, std::chrono::seconds(120));
+    interval = PipelineExecutorContext::nextDrainWarningInterval(interval);
+    EXPECT_EQ(interval, std::chrono::seconds(240));
+    interval = PipelineExecutorContext::nextDrainWarningInterval(interval);
+    EXPECT_EQ(interval, std::chrono::seconds(300));
+    interval = PipelineExecutorContext::nextDrainWarningInterval(interval);
+    EXPECT_EQ(interval, std::chrono::seconds(300));
+
+    EXPECT_EQ(
+        PipelineExecutorContext::nextDrainWarningInterval(std::chrono::milliseconds::zero()),
+        PipelineExecutorContext::default_drain_warning_max_interval);
+    EXPECT_EQ(
+        PipelineExecutorContext::nextDrainWarningInterval(std::chrono::milliseconds(-1)),
+        PipelineExecutorContext::default_drain_warning_max_interval);
+    EXPECT_EQ(
+        PipelineExecutorContext::nextDrainWarningInterval(std::chrono::milliseconds::max()),
+        PipelineExecutorContext::default_drain_warning_max_interval);
+}
+
+TEST(PipelineCancellationTest, DrainWarningBackoffAndPromptWakeup)
+{
+    // Verify exponential backoff spaces out repeated warnings (20ms + 40ms + 80ms = 140ms for 3 warnings)
+    // while stuck and wakes immediately when active_ref_count drops to 0.
+    {
+        PipelineExecutorContext context;
+        context.setDrainWarningIntervalsForTest(std::chrono::milliseconds(20), std::chrono::milliseconds(100));
+        context.incActiveRefCount();
+        auto thread_manager = newThreadManager();
+        thread_manager->schedule(false, "wait", [&context]() { context.wait(); });
+
+        const auto cancelled_before = std::chrono::steady_clock::now();
+        context.cancel();
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (context.getDrainWarningCountForTest() < 3 && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        const auto elapsed = std::chrono::steady_clock::now() - cancelled_before;
+        EXPECT_GE(context.getDrainWarningCountForTest(), UInt64{3});
+        // Without backoff, 3 warnings at 20ms would fire in ~60ms; with 20ms -> 40ms -> 80ms backoff, >= 140ms.
+        EXPECT_GE(elapsed, std::chrono::milliseconds(120));
+
+        context.decActiveRefCount();
+        thread_manager->wait();
+    }
+
+    // Verify draining before the initial warning interval wakes promptly with zero warnings.
+    {
+        PipelineExecutorContext context;
+        context.incActiveRefCount();
+        auto thread_manager = newThreadManager();
+        thread_manager->schedule(false, "wait", [&context]() { context.wait(); });
+
+        context.cancel();
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        const auto drain_start = std::chrono::steady_clock::now();
+        context.decActiveRefCount();
+        thread_manager->wait();
+        EXPECT_LT(std::chrono::steady_clock::now() - drain_start, std::chrono::seconds(5));
+        EXPECT_EQ(context.getDrainWarningCountForTest(), UInt64{0});
+    }
 }
 
 TEST(PipelineCancellationTest, CallbackRegistrationAndRepeatedCancel)
