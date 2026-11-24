@@ -881,8 +881,7 @@ async fn request_snapshot_from_leader(
                     snap_bytes.len(),
                     elapsed,
                 );
-                slog::debug!(
-                    &**slog_global::borrow_global(),
+                debug!(
                     "{} request_snapshot_from_leader snapshot: {:?}",
                     tag,
                     cs.get_snapshot(),
