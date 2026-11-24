@@ -30,7 +30,7 @@ list(REMOVE_ITEM tiflash_functions_headers IFunction.h FunctionFactory.h Functio
 
 add_library(tiflash_functions ${tiflash_functions_sources})
 
-target_link_libraries(tiflash_functions PUBLIC dbms PRIVATE ${FARMHASH_LIBRARIES} ${METROHASH_LIBRARIES})
+target_link_libraries(tiflash_functions PUBLIC dbms PRIVATE ${FARMHASH_LIBRARIES} ${METROHASH_LIBRARIES} samefn)
 
 target_include_directories (tiflash_functions BEFORE PUBLIC ${TiFlash_SOURCE_DIR}/contrib/libfarmhash)
 target_include_directories (tiflash_functions BEFORE PUBLIC ${TiFlash_SOURCE_DIR}/contrib/libmetrohash/src)
