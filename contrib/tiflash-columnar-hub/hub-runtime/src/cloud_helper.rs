@@ -43,7 +43,7 @@ use kvengine::{
             filter::TableScanCtx, ColumnarFileCache, ColumnarFileCacheConfig, ColumnarMetaCache,
         },
         file::FdCache,
-        fts::{FtsCache, FtsCacheConfig, FtsDeltaCache, FtsDeltaCacheConfig},
+        fts::{FtsCache, FtsCacheConfig, FtsDeltaCache, FtsDeltaCacheConfig, FtsPreparedDocCache},
         schema_file::SchemaFile,
         sstable::{BlockCache, BlockCacheType},
         vector_index::{VectorIndexCache, VectorIndexConfig},
@@ -349,6 +349,7 @@ pub struct CloudHelper {
     columnar_meta_cache: ColumnarMetaCache,
     fts_cache: FtsCache,
     fts_delta_cache: FtsDeltaCache,
+    fts_prepared_doc_cache: FtsPreparedDocCache,
     block_cache: BlockCache,
     snapshot_cache: SnapCache,
     snapshot_cache_capable_stores: Arc<DashMap<u64, ()>>,
@@ -372,6 +373,7 @@ impl CloudHelper {
         columnar_file_cache_config: ColumnarFileCacheConfig,
         fts_cache_config: FtsCacheConfig,
         fts_delta_cache_config: FtsDeltaCacheConfig,
+        fts_prepared_doc_cache: FtsPreparedDocCache,
         block_cache_size: AbsoluteOrPercentSize,
         schema_file_cache_max_keyspaces: usize,
     ) -> Self {
@@ -422,6 +424,7 @@ impl CloudHelper {
             columnar_meta_cache,
             fts_cache,
             fts_delta_cache,
+            fts_prepared_doc_cache,
             block_cache,
             snapshot_cache,
             snapshot_cache_capable_stores,
@@ -561,6 +564,7 @@ impl CloudHelper {
         let columnar_meta_cache = self.columnar_meta_cache.clone();
         let fts_cache = self.fts_cache.clone();
         let fts_delta_cache = self.fts_delta_cache.clone();
+        let fts_prepared_doc_cache = self.fts_prepared_doc_cache.clone();
         let block_cache = self.block_cache.clone();
         let tables_clone = tables.clone();
         let fts_query_info_clone = fts_query_info.clone();
@@ -585,6 +589,7 @@ impl CloudHelper {
                     block_cache,
                     fts_cache,
                     fts_delta_cache,
+                    fts_prepared_doc_cache,
                     shard_id,
                     shard_ver,
                     start_ts,
@@ -739,6 +744,7 @@ async fn request_snapshot_from_leader(
     block_cache: BlockCache,
     fts_cache: FtsCache,
     fts_delta_cache: FtsDeltaCache,
+    fts_prepared_doc_cache: FtsPreparedDocCache,
     shard_id: u64,
     shard_ver: u64,
     start_ts: u64,
@@ -905,6 +911,7 @@ async fn request_snapshot_from_leader(
                     columnar_file_cache: Some(columnar_file_cache),
                     fts_cache,
                     fts_delta_cache,
+                    fts_prepared_doc_cache,
                     meta_file_cache,
                     schema_files: Some(schema_files.clone()),
                     txn_chunk_manager,
@@ -1247,6 +1254,7 @@ async fn get_or_request_shared_snapshot(
     block_cache: BlockCache,
     fts_cache: FtsCache,
     fts_delta_cache: FtsDeltaCache,
+    fts_prepared_doc_cache: FtsPreparedDocCache,
     shard_id: u64,
     shard_ver: u64,
     start_ts: u64,
@@ -1309,6 +1317,7 @@ async fn get_or_request_shared_snapshot(
         block_cache,
         fts_cache,
         fts_delta_cache,
+        fts_prepared_doc_cache,
         shard_id,
         shard_ver,
         start_ts,
