@@ -31,9 +31,13 @@ public:
         PipelineExecPtr && pipeline_exec_)
         : Task(exec_context_, req_id, ExecTaskStatus::RUNNING)
         , PipelineTaskBase(std::move(pipeline_exec_))
-    {}
+    {
+        describeOperators(describePipelineOperators());
+    }
 
 protected:
+    TaskStopSources getNotifyStopSources() const override { return getPipelineNotifyStopSources(); }
+
     ExecTaskStatus executeImpl() override { return runExecute(); }
 
     ExecTaskStatus executeIOImpl() override { return runExecuteIO(); }

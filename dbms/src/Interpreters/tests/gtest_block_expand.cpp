@@ -403,5 +403,15 @@ try
 }
 CATCH
 
+TEST_F(BlockExpand, RejectEmptyGroupingSet)
+try
+{
+    ASSERT_THROW(Expand{GroupingSets{GroupingSet{}}}, DB::Exception);
+    ASSERT_THROW(Expand{GroupingSets{}}, DB::Exception);
+    // One grouping_exprs message without any column is still a valid grouping set.
+    ASSERT_NO_THROW(Expand{GroupingSets{GroupingSet{GroupingColumnNames{}}}});
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

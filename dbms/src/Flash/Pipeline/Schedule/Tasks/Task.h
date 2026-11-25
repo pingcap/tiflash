@@ -21,6 +21,9 @@
 #include <Flash/Pipeline/Schedule/Tasks/TaskTimer.h>
 #include <memory.h>
 
+#include <memory>
+#include <vector>
+
 namespace DB
 {
 /**
@@ -62,6 +65,11 @@ enum class NotifyType
 };
 
 class PipelineExecutorContext;
+class TaskWaiter;
+class TaskStopSource;
+using TaskWaiterPtr = std::shared_ptr<TaskWaiter>;
+using TaskStopSourcePtr = std::shared_ptr<TaskStopSource>;
+using TaskStopSources = std::vector<TaskStopSourcePtr>;
 
 class Task
 {
@@ -77,6 +85,8 @@ public:
     virtual ~Task();
 
     ExecTaskStatus getStatus() const { return task_status; }
+    ExecTaskStatus getDiagnosticStatus() const { return diagnostic_status.load(std::memory_order_relaxed); }
+    UInt64 getDiagnosticThreadId() const { return diagnostic_thread_id.load(std::memory_order_relaxed); }
 
     ExecTaskStatus execute();
 
@@ -126,10 +136,16 @@ public:
     void setNotifyType(NotifyType type) { notify_type = type; }
     NotifyType getNotifyType() const { return notify_type; }
 
+    // Only the stop sources which discard the currently waiting operator may interrupt this wait.
+    virtual TaskStopSources getNotifyStopSources() const { return {}; }
+    TaskWaiterPtr getWaiter() const { return waiter.lock(); }
+    void setWaiter(const TaskWaiterPtr & waiter_) { waiter = waiter_; }
+
 public:
     LoggerPtr log;
 
 protected:
+    void describeOperators(String operators);
     virtual ExecTaskStatus executeImpl() = 0;
     virtual ExecTaskStatus executeIOImpl() { return ExecTaskStatus::RUNNING; }
     // Avoid allocating memory in `await` if possible.
@@ -158,9 +174,12 @@ private:
     MemoryTracker * mem_tracker_ptr;
 
     ExecTaskStatus task_status;
+    std::atomic<ExecTaskStatus> diagnostic_status;
+    std::atomic<UInt64> diagnostic_thread_id{0};
     NotifyType notify_type{NotifyType::WAIT_ON_NOTHING};
 
     bool is_finalized = false;
+    std::weak_ptr<TaskWaiter> waiter;
 };
 using TaskPtr = std::unique_ptr<Task>;
 } // namespace DB

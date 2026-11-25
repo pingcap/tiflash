@@ -27,6 +27,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <unordered_map>
 
 namespace DB
@@ -99,6 +100,12 @@ struct MPPQuery
     std::unordered_map<MPPGatherId, MPPGatherTaskSetPtr, MPPGatherIdHash> mpp_gathers;
     std::shared_ptr<QueryOperatorSpillContexts> mpp_query_operator_spill_contexts;
     bool has_meaningful_gather_id;
+    /// The canonical resource group name of this query, established by the first registered
+    /// task (an empty string counts as established) and immutable for the query's lifetime.
+    /// Unset for phantom queries created by establish requests before any task is registered.
+    /// The resource group name is a query attribute rather than part of the query identity,
+    /// and MPPTaskManager::registerTask rejects tasks whose group differs from this one.
+    std::optional<String> resource_group_name;
 };
 using MPPQueryPtr = std::shared_ptr<MPPQuery>;
 
@@ -267,6 +274,7 @@ public:
     void abortMPPGather(const MPPGatherId & gather_id, const String & reason, AbortType abort_type);
 
     String toString();
+    Strings dumpTasks();
 
     MPPQueryPtr getMPPQueryWithoutLock(const MPPQueryId & query_id);
 

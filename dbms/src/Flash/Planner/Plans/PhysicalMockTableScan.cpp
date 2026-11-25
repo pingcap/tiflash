@@ -114,6 +114,8 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
     const TiDBTableScan & table_scan)
 {
     RUNTIME_CHECK(context.isTest());
+    if (const auto & before_build = context.mockStorage()->before_scan_build)
+        before_build(context, table_scan);
     auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, table_scan);
     auto physical_mock_table_scan = std::make_shared<PhysicalMockTableScan>(
         executor_id,
@@ -169,8 +171,11 @@ void PhysicalMockTableScan::buildPipelineExecGroupImpl(
     {
         for (const auto & stream : mock_streams)
         {
-            group_builder.addConcurrency(
-                std::make_unique<BlockInputStreamSourceOp>(exec_context, log->identifier(), stream));
+            if (const auto & factory = context.mockStorage()->source_factory)
+                group_builder.addConcurrency(factory(exec_context, stream->getHeader()));
+            else
+                group_builder.addConcurrency(
+                    std::make_unique<BlockInputStreamSourceOp>(exec_context, log->identifier(), stream));
         }
     }
 }

@@ -22,7 +22,10 @@
 #include <TiDB/Schema/TiDB.h>
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <ext/scope_guard.h>
+#include <set>
+#include <unordered_set>
 
 namespace DB
 {
@@ -96,6 +99,43 @@ TEST_F(TestMPPTaskManager, RejectsExchangeSenderWithoutReceivers)
         }
     }
 }
+
+TEST_F(TestMPPTaskManager, DumpIncludesRegisteredTasksBeforeActivation)
+try
+{
+    auto context = createContextForTest();
+    auto manager = context->getTMTContext().getMPPTaskManager();
+    auto gather_id = MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "", 1, ""));
+    mpp::TaskMeta first_meta;
+    mpp::TaskMeta second_meta;
+    fillTaskMeta(&first_meta, 1, gather_id);
+    fillTaskMeta(&second_meta, 2, gather_id);
+    auto first_task = MPPTask::newTaskForTest(first_meta, context);
+    auto second_task = MPPTask::newTaskForTest(second_meta, context);
+    SCOPE_EXIT({
+        manager->unregisterTask(first_task->getId(), "");
+        manager->unregisterTask(second_task->getId(), "");
+    });
+
+    EXPECT_TRUE(manager->dumpTasks().empty());
+    ASSERT_TRUE(manager->registerTask(first_task.get()).first);
+    const auto first_inactive = fmt::format("mpp_task={} status=NOT_ACTIVE", first_task->getId().toString());
+    EXPECT_EQ(manager->dumpTasks(), Strings{first_inactive});
+
+    ASSERT_TRUE(manager->registerTask(second_task.get()).first);
+    ASSERT_TRUE(manager->makeTaskActive(first_task).first);
+    const auto second_inactive = fmt::format("mpp_task={} status=NOT_ACTIVE", second_task->getId().toString());
+    auto dump = manager->dumpTasks();
+    ASSERT_EQ(dump.size(), 2);
+    EXPECT_NE(std::find(dump.begin(), dump.end(), first_task->dumpExecutionState()), dump.end());
+    EXPECT_NE(std::find(dump.begin(), dump.end(), second_inactive), dump.end());
+
+    ASSERT_TRUE(manager->unregisterTask(second_task->getId(), "").first);
+    EXPECT_EQ(manager->dumpTasks(), Strings{first_task->dumpExecutionState()});
+    ASSERT_TRUE(manager->unregisterTask(first_task->getId(), "").first);
+    EXPECT_TRUE(manager->dumpTasks().empty());
+}
+CATCH
 
 TEST_F(TestMPPTaskManager, testUnregisterMPPTask)
 try
@@ -209,6 +249,181 @@ try
     ASSERT_TRUE(mpp_task_manager->getMPPTaskMonitor()->isInMonitor(original_task->getId().toString()));
 }
 CATCH
+
+TEST_F(TestMPPTaskManager, TestSenderMetaWithoutResourceGroup)
+try
+{
+    auto context = createContextForTest();
+    auto mpp_task_manager = context->getTMTContext().getMPPTaskManager();
+
+    auto gather_id = MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "default", 1, ""));
+    mpp::TaskMeta sender_meta;
+    fillTaskMeta(&sender_meta, 1, gather_id);
+    auto mpp_task = MPPTask::newTaskForTest(sender_meta, context);
+    ASSERT_TRUE(mpp_task_manager->registerTask(mpp_task.get()).first);
+    ASSERT_TRUE(mpp_task_manager->makeTaskActive(mpp_task).first);
+
+    /// The sender meta of an establish request is decoded from the encoded task meta of the
+    /// exchange plan, which carries no resource group name, while the receiver meta and the
+    /// registered task do. The lookup should still find the sender task instead of timing out.
+    mpp::EstablishMPPConnectionRequest establish_req;
+    fillTaskMeta(establish_req.mutable_receiver_meta(), 2, gather_id);
+    auto * sender_meta_in_req = establish_req.mutable_sender_meta();
+    fillTaskMeta(sender_meta_in_req, 1, gather_id);
+    sender_meta_in_req->clear_resource_group_name();
+
+    EstablishCallData establish_call_data;
+    auto find_tunnel_result
+        = mpp_task_manager->findAsyncTunnel(&establish_req, &establish_call_data, nullptr, *context);
+    ASSERT_TRUE(find_tunnel_result.first == nullptr);
+    EXPECT_EQ(find_tunnel_result.second.find("Can't find task"), String::npos) << find_tunnel_result.second;
+    EXPECT_NE(find_tunnel_result.second.find("can't find tunnel"), String::npos) << find_tunnel_result.second;
+
+    /// The same applies to the local tunnel lookup.
+    auto [tunnel, err_msg] = mpp_task_manager->findTunnelWithTimeout(&establish_req, std::chrono::seconds(0));
+    ASSERT_TRUE(tunnel == nullptr);
+    EXPECT_NE(err_msg.find("can't find tunnel"), String::npos) << err_msg;
+
+    mpp_task_manager->unregisterTask(mpp_task->getId(), "");
+}
+CATCH
+
+TEST_F(TestMPPTaskManager, PhantomEstablishWithEmptyGroupThenTaskWithGroup)
+try
+{
+    auto context = createContextForTest();
+    auto mpp_task_manager = context->getTMTContext().getMPPTaskManager();
+
+    /// An establish request may arrive before the task is dispatched, and its metas carry no
+    /// resource group name. It creates a phantom query without a canonical resource group.
+    auto gather_id = MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "default", 1, ""));
+    mpp::EstablishMPPConnectionRequest establish_req;
+    fillTaskMeta(establish_req.mutable_receiver_meta(), 2, gather_id);
+    fillTaskMeta(establish_req.mutable_sender_meta(), 1, gather_id);
+    establish_req.mutable_sender_meta()->clear_resource_group_name();
+    establish_req.mutable_receiver_meta()->clear_resource_group_name();
+
+    EstablishCallData establish_call_data;
+    auto find_tunnel_result
+        = mpp_task_manager->findAsyncTunnel(&establish_req, &establish_call_data, nullptr, *context);
+    ASSERT_TRUE(find_tunnel_result.first == nullptr && find_tunnel_result.second.empty());
+    auto query = mpp_task_manager->getMPPQuery(gather_id.query_id);
+    ASSERT_TRUE(query != nullptr);
+    ASSERT_FALSE(query->resource_group_name.has_value());
+
+    /// The real task dispatched with a non-empty group registers into the same phantom query
+    /// and establishes the canonical group.
+    mpp::TaskMeta sender_meta;
+    fillTaskMeta(&sender_meta, 1, gather_id);
+    auto mpp_task = MPPTask::newTaskForTest(sender_meta, context);
+    ASSERT_TRUE(mpp_task_manager->registerTask(mpp_task.get()).first);
+    ASSERT_TRUE(mpp_task_manager->makeTaskActive(mpp_task).first);
+    query = mpp_task_manager->getMPPQuery(gather_id.query_id);
+    ASSERT_TRUE(query != nullptr);
+    ASSERT_TRUE(query->resource_group_name.has_value());
+    EXPECT_EQ(*query->resource_group_name, "default");
+
+    /// Tunnel lookup with the group-less meta still finds the registered task.
+    auto [tunnel, err_msg] = mpp_task_manager->findTunnelWithTimeout(&establish_req, std::chrono::seconds(0));
+    ASSERT_TRUE(tunnel == nullptr);
+    EXPECT_EQ(err_msg.find("Can't find task"), String::npos) << err_msg;
+    EXPECT_NE(err_msg.find("can't find tunnel"), String::npos) << err_msg;
+
+    mpp_task_manager->unregisterTask(mpp_task->getId(), "");
+    ASSERT_TRUE(mpp_task_manager->getMPPQuery(gather_id.query_id) == nullptr);
+}
+CATCH
+
+TEST_F(TestMPPTaskManager, RegisterTaskEnforcesOneResourceGroupPerQuery)
+try
+{
+    auto context = createContextForTest();
+    auto mpp_task_manager = context->getTMTContext().getMPPTaskManager();
+
+    auto gather_id = MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "rg1", 1, ""));
+    mpp::TaskMeta meta1;
+    fillTaskMeta(&meta1, 1, gather_id);
+    auto task1 = MPPTask::newTaskForTest(meta1, context);
+    ASSERT_TRUE(mpp_task_manager->registerTask(task1.get()).first);
+    ASSERT_TRUE(mpp_task_manager->tryToScheduleTask(task1->getScheduleEntry()));
+    ASSERT_TRUE(mpp_task_manager->getCurrentMinTSOQueryId("rg1") == gather_id.query_id);
+
+    /// A second task with the same numeric query id but a different resource group must be
+    /// rejected at the registration boundary, before any gather/process-list/scheduler side
+    /// effect, so mixed groups can never reach dispatch, the scheduler or CTEs.
+    auto other_group_gather_id = MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "rg2", 1, ""));
+    mpp::TaskMeta meta2;
+    fillTaskMeta(&meta2, 2, other_group_gather_id);
+    auto task2 = MPPTask::newTaskForTest(meta2, context);
+    auto result = mpp_task_manager->registerTask(task2.get());
+    ASSERT_FALSE(result.first);
+    EXPECT_NE(result.second.find("resource group name"), String::npos) << result.second;
+    task2->handleError(result.second);
+    ASSERT_FALSE(mpp_task_manager->isTaskExists(task2->getId()));
+    auto query = mpp_task_manager->getMPPQuery(gather_id.query_id);
+    ASSERT_TRUE(query != nullptr);
+    ASSERT_EQ(query->mpp_gathers.size(), 1);
+    ASSERT_TRUE(query->resource_group_name.has_value());
+    EXPECT_EQ(*query->resource_group_name, "rg1");
+    /// No scheduler state is created for the rejected group.
+    ASSERT_TRUE(mpp_task_manager->getCurrentMinTSOQueryId("rg2") == MPPTaskId::Max_Query_Id);
+
+    /// Tasks with the canonical group can still register, schedule and clean up normally,
+    /// including thread credit/debit in the scheduler.
+    mpp::TaskMeta meta3;
+    fillTaskMeta(&meta3, 3, gather_id);
+    auto task3 = MPPTask::newTaskForTest(meta3, context);
+    ASSERT_TRUE(mpp_task_manager->registerTask(task3.get()).first);
+    ASSERT_TRUE(mpp_task_manager->tryToScheduleTask(task3->getScheduleEntry()));
+    ASSERT_TRUE(mpp_task_manager->makeTaskActive(task1).first);
+    ASSERT_TRUE(mpp_task_manager->makeTaskActive(task3).first);
+
+    mpp_task_manager->unregisterTask(task1->getId(), "");
+    mpp_task_manager->unregisterTask(task3->getId(), "");
+    /// Destroying the scheduled tasks releases their scheduler threads, so the thread
+    /// credit/debit of the canonical group must still balance after the rejection above.
+    task1.reset();
+    task3.reset();
+    ASSERT_TRUE(mpp_task_manager->getMPPQuery(gather_id.query_id) == nullptr);
+    ASSERT_TRUE(mpp_task_manager->getCurrentMinTSOQueryId("rg1") == MPPTaskId::Max_Query_Id);
+}
+CATCH
+
+TEST(TestMPPQueryId, ResourceGroupNameIsNotPartOfIdentity)
+{
+    const MPPQueryId query1(100, 1, 2, 3, "rg1", 1, "");
+    const MPPQueryId query2(100, 1, 2, 3, "rg2", 1, "");
+
+    // The resource group name is a query attribute, not part of the identity, so that task
+    // metas with and without the group (e.g. encoded exchange metas) refer to the same query.
+    EXPECT_EQ(query1, query2);
+    EXPECT_EQ(MPPQueryIdHash()(query1), MPPQueryIdHash()(query2));
+    // operator< must agree with operator==, otherwise std::set treats equal queries as distinct.
+    EXPECT_FALSE(query1 < query2);
+    EXPECT_FALSE(query2 < query1);
+    EXPECT_EQ((std::set<MPPQueryId>{query1, query2}.size()), 1);
+    EXPECT_EQ((std::unordered_set<MPPQueryId, MPPQueryIdHash>{query1, query2}.size()), 1);
+
+    const MPPGatherId gather1(1, query1);
+    const MPPGatherId gather2(1, query2);
+    EXPECT_EQ(gather1, gather2);
+    EXPECT_EQ((std::unordered_set<MPPGatherId, MPPGatherIdHash>{gather1, gather2}.size()), 1);
+    // toString still carries the group for logging and CTE keys. All tasks of one query share
+    // the same group (enforced by registerTask), so the string is stable within a query.
+    EXPECT_NE(gather1.toString(), gather2.toString());
+    EXPECT_NE(String::npos, gather1.toString().find("rg1"));
+    EXPECT_EQ(gather1.toString(), MPPGatherId(1, query1).toString());
+}
+
+TEST(TestMPPQueryId, OldVersionResourceGroupNameIsNotPartOfIdentity)
+{
+    const MPPQueryId query1(0, 0, 0, 10, "", 0, "");
+    const MPPQueryId query2(0, 0, 0, 10, "rg", 0, "");
+
+    EXPECT_EQ(query1, query2);
+    EXPECT_FALSE(query1 < query2);
+    EXPECT_FALSE(query2 < query1);
+}
 
 } // namespace tests
 } // namespace DB

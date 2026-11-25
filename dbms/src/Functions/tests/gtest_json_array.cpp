@@ -149,6 +149,23 @@ try
         auto expect = gen_column_expect("[[], []]");
         ASSERT_COLUMN_EQ(expect, res);
     }
+
+    // json_array(null_const, not_null_column)
+    // Partially-constant call with a const NULL and no nullable argument
+    // column: constant adaptation does not kick in, so the kernel itself has
+    // to turn the const NULL into a JSON null element.
+    {
+        auto res = executeFunctionWithCast({4, 0}, inputs);
+        auto expect = gen_column_expect("[null, []]");
+        ASSERT_COLUMN_EQ(expect, res);
+    }
+
+    // json_array(only_null_const, not_null_column)
+    {
+        auto res = executeFunctionWithCast({5, 0}, inputs);
+        auto expect = gen_column_expect("[null, []]");
+        ASSERT_COLUMN_EQ(expect, res);
+    }
 }
 CATCH
 

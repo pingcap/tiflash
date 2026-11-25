@@ -14,11 +14,17 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Columns/ColumnUtils.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context.h>
 #include <Operators/AutoPassThroughHashAggContext.h>
+#include <Poco/Channel.h>
+#include <Poco/Message.h>
+#include <Poco/SplitterChannel.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/StorageDisaggregatedColumnar.h>
 #include <TestUtils/FailPointUtils.h>
 #include <TestUtils/MPPTaskTestUtils.h>
 
@@ -1085,6 +1091,192 @@ try
     WRAP_FOR_SERVER_TEST_END
 }
 CATCH
+
+#if ENABLE_NEXT_GEN_COLUMNAR && defined(FIU_ENABLE)
+TEST_F(ComputeServerRunner, cancelColumnarBuildBeforeExecutorPublication)
+try
+{
+    enablePipeline(true);
+    context.context->setSetting("max_threads", "1");
+    startServers(1);
+    auto cancellation = std::make_shared<ColumnarCancellation>();
+    context.mockStorage()->before_scan_build = [cancellation](Context & ctx, const TiDBTableScan & scan) {
+        // Enter the production Columnar builder during queryExecute(), before
+        // MPPTask can put an executor in its holder. No live PD is needed.
+        RNColumnarReadTask::buildColumnarReadTaskWithBackoff(
+            Logger::get("columnar_build_cancel_test"),
+            ctx,
+            1,
+            scan,
+            {},
+            {},
+            2,
+            nullptr,
+            cancellation);
+    };
+    SCOPE_EXIT({ context.mockStorage()->before_scan_build = {}; });
+    auto sync = SyncPointCtl::enableInScope("columnar_build_registered");
+    auto properties = getDAGPropertiesForTest(1);
+    MPPGatherId gather_id(
+        properties.gather_id,
+        properties.query_ts,
+        properties.local_query_id,
+        properties.server_id,
+        properties.start_ts,
+        "",
+        0,
+        "");
+    auto stream = prepareMPPStreams(context.scan("test_db", "test_table_1"), properties);
+    sync.waitAndPause();
+    auto manager = TiFlashTestEnv::getGlobalContext(test_meta.context_idx).getTMTContext().getMPPTaskManager();
+    auto monitor = manager->getMPPTaskMonitor();
+    Strings task_ids;
+    {
+        std::lock_guard lock(monitor->mu);
+        for (const auto & [id, _] : monitor->monitored_tasks)
+            task_ids.push_back(id);
+    }
+    EXPECT_FALSE(task_ids.empty());
+    const auto dump = manager->dumpTasks();
+    EXPECT_TRUE(std::any_of(dump.begin(), dump.end(), [](const auto & task) {
+        return task.find("executor not initialized") != String::npos;
+    }));
+    MockComputeServerManager::instance().cancelGather(gather_id);
+    // Assert delivery while the builder is still paused: a check of
+    // Context::isCancelled() after returning from an RPC cannot satisfy this.
+    EXPECT_TRUE(cancellation->isCancelled());
+    cancellation->cancel(); // Release a broken implementation without entering real PD.
+    sync.disable();
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    auto removed = [&] {
+        return std::none_of(task_ids.begin(), task_ids.end(), [&](const auto & id) {
+            return monitor->isInMonitor(id);
+        });
+    };
+    while (!removed() && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    EXPECT_TRUE(removed());
+    EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
+    EXPECT_TRUE(manager->dumpTasks().empty());
+}
+CATCH
+
+TEST_F(ComputeServerRunner, cancelColumnarMaterializationEndsMPPTask)
+try
+{
+    class MaterializeSource : public SourceOp
+    {
+    public:
+        MaterializeSource(PipelineExecutorContext & exec_context, const Block & header, RNColumnarReaderWorkPtr work_)
+            : SourceOp(exec_context, "columnar_cancel_mpp_test")
+            , work(std::move(work_))
+        {
+            auto cancellation = std::make_shared<ColumnarCancellation>();
+            exec_context.addCancellationCallback([cancellation] { cancellation->cancel(); });
+            pool = RNColumnarReadTask::createForCancellationTest(cancellation);
+            setHeader(header);
+        }
+        String getName() const override { return "ColumnarMaterializeTestSource"; }
+        OperatorStatus readImpl(Block &) override { return OperatorStatus::IO_IN; }
+        OperatorStatus executeIOImpl() override
+        {
+            pool->getOrCreateReader(work);
+            return OperatorStatus::HAS_OUTPUT;
+        }
+        RNColumnarReadTaskPtr pool;
+        RNColumnarReaderWorkPtr work;
+    };
+    class EndStatisticsChannel : public Poco::Channel
+    {
+    public:
+        void log(const Poco::Message & msg) override
+        {
+            if (msg.getText().find("\"task_end_timestamp\":") == String::npos)
+                return;
+            std::lock_guard lock(mutex);
+            statistics[msg.getSource()] = msg.getText();
+        }
+        std::mutex mutex;
+        std::unordered_map<String, String> statistics;
+    };
+    Poco::AutoPtr<EndStatisticsChannel> channel = new EndStatisticsChannel;
+    auto * splitter = dynamic_cast<Poco::SplitterChannel *>(Poco::Logger::root().getChannel());
+    ASSERT_NE(splitter, nullptr);
+    splitter->addChannel(channel);
+    SCOPE_EXIT({ splitter->removeChannel(channel); });
+
+    enablePipeline(true);
+    context.context->setSetting("max_threads", "1");
+    startServers(1);
+    auto work = std::make_shared<RNColumnarReaderWork>(RNColumnarReaderPlan{1, 1, 1, {}});
+    work->state = RNColumnarReaderMaterializeState::Creating;
+    context.mockStorage()->source_factory = [work](auto & executor, const Block & header) {
+        return std::make_unique<MaterializeSource>(executor, header, work);
+    };
+    SCOPE_EXIT({ context.mockStorage()->source_factory = {}; });
+    auto sync = SyncPointCtl::enableInScope("columnar_reader_wait");
+    auto properties = getDAGPropertiesForTest(1);
+    MPPGatherId gather_id(
+        properties.gather_id,
+        properties.query_ts,
+        properties.local_query_id,
+        properties.server_id,
+        properties.start_ts,
+        "",
+        0,
+        "");
+    auto stream = prepareMPPStreams(context.scan("test_db", "test_table_1"), properties);
+    sync.waitAndPause();
+    auto manager = TiFlashTestEnv::getGlobalContext(test_meta.context_idx).getTMTContext().getMPPTaskManager();
+    auto monitor = manager->getMPPTaskMonitor();
+    Strings task_ids;
+    {
+        std::lock_guard lock(monitor->mu);
+        for (const auto & [id, _] : monitor->monitored_tasks)
+            task_ids.push_back(id);
+    }
+    EXPECT_FALSE(task_ids.empty());
+    auto dump = manager->dumpTasks();
+    EXPECT_TRUE(std::any_of(dump.begin(), dump.end(), [](const auto & task) {
+        return task.find("status=IO_IN") != String::npos && task.find("ColumnarMaterializeTestSource") != String::npos;
+    }));
+    MockComputeServerManager::instance().cancelGather(gather_id);
+    sync.disable();
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    auto removed = [&] {
+        return std::none_of(task_ids.begin(), task_ids.end(), [&](const auto & id) {
+            return monitor->isInMonitor(id);
+        });
+    };
+    while (!removed() && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    EXPECT_TRUE(removed()) << "cancel must drain executing Columnar IO and destroy monitored MPP tasks";
+    // Unblock a broken implementation so a regression fails instead of hanging teardown.
+    {
+        std::lock_guard lock(work->mutex);
+        work->state = RNColumnarReaderMaterializeState::Failed;
+        work->exception = std::make_exception_ptr(Exception("test cleanup"));
+    }
+    work->cv.notify_all();
+    EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
+    EXPECT_TRUE(manager->dumpTasks().empty());
+    {
+        std::lock_guard lock(channel->mutex);
+        for (const auto & id : task_ids)
+        {
+            auto it = std::find_if(channel->statistics.begin(), channel->statistics.end(), [&](const auto & entry) {
+                return entry.first.ends_with(id);
+            });
+            ASSERT_NE(it, channel->statistics.end());
+            const auto & text = it->second;
+            const String key = "\"task_end_timestamp\":";
+            EXPECT_GT(std::stoull(text.substr(text.find(key) + key.size())), 0);
+            EXPECT_NE(text.find("\"status\":\"CANCELLED\""), String::npos);
+        }
+    }
+}
+CATCH
+#endif
 
 TEST_F(ComputeServerRunner, cancelJoinTasks)
 try

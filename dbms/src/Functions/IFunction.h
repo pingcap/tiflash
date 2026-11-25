@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <Columns/IColumn.h>
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/Field.h>
@@ -108,11 +109,57 @@ public:
         return prepare(block)->execute(block, arguments, result);
     }
 
+    /// Execute the function only on rows where mask[i] != 0, and the result
+    /// column stored at `result` has mask.size() rows.
+    ///
+    /// Masked-on rows must be exact. Masked-off rows only need to be *safe to
+    /// read*: a full-size column of the result type holding initialized memory
+    /// whose values carry no meaning, because the consumer never propagates
+    /// them (see maskedExecute). Implementations may either skip masked-off
+    /// rows entirely, or evaluate them as if the mask were all ones - what
+    /// they must not do is throw on those rows, which a short-circuit
+    /// evaluation would have suppressed. Producing warnings on masked-off
+    /// rows is accepted: TiDB does not keep warning parity with MySQL, and
+    /// TiFlash warnings are not reliably reported back to the client.
+    ///
+    /// The default implementation evaluates the function on all rows through
+    /// the normal execute() entry (so null/constant adaptation still applies):
+    /// for cheap, row-independent functions that beats filtering the argument
+    /// columns and expanding the result back. Functions that can throw get
+    /// that filter/expand treatment instead, so their masked-off rows are
+    /// not evaluated at all. Functions whose per-row evaluation is expensive
+    /// (e.g. JSON parsing on long strings) can override this to skip
+    /// masked-off rows without the filter/expand copies.
+    ///
+    /// mask.size() is the authoritative row count; block.rows() must not be used
+    /// because the block may carry unrelated helper columns with a different row
+    /// count (e.g. match_helper_column in semi joins).
+    virtual void executeWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter & mask) const;
+
     /** Should we evaluate this function while constant folding, if arguments are constants?
       * Usually this is true. Notable counterexample is function 'sleep'.
       * If we will call it during query analysis, we will sleep extra amount of time.
       */
     virtual bool isSuitableForConstantFolding() const { return true; }
+
+    /// Short-circuit functions consume deferred arguments themselves. The first argument is always required.
+    virtual bool isShortCircuit() const { return false; }
+
+    /// Opt in only for row-independent functions that can execute on a filtered block.
+    virtual bool isSuitableForShortCircuitArgumentsExecution() const { return false; }
+
+    /// True if the function may throw an exception at execution time,
+    /// e.g. casting an invalid string as JSON, or integer division by zero.
+    /// Note this is different from isSuitableForShortCircuitArgumentsExecution: the latter
+    /// tells whether the function is *safe* to run on a filtered block, while this tells
+    /// whether deferring the function can *avoid an error* (to match MySQL's short-circuit
+    /// semantics). Only subtrees containing functions that can throw are worth deferring;
+    /// ordinary functions are always evaluated eagerly to avoid lazy-execution overhead.
+    virtual bool canThrow() const { return false; }
 
     /** Function is called "injective" if it returns different result for different values of arguments.
       * Example: hex, negate, tuple...
@@ -278,6 +325,25 @@ public:
     virtual bool isDeterministicInScopeOfQuery() const { return true; }
     virtual bool hasInformationAboutMonotonicity() const { return false; }
 
+    virtual bool isShortCircuit() const { return false; }
+    virtual bool isSuitableForShortCircuitArgumentsExecution() const
+    {
+        return isDeterministic() && isDeterministicInScopeOfQuery() && isSuitableForConstantFolding();
+    }
+
+    /// See IFunctionBase::canThrow.
+    virtual bool canThrow() const { return false; }
+
+    /// See IFunctionBase::executeWithMask. The default implementation executes
+    /// through DefaultExecutable (so that the null and constant default
+    /// implementations still apply): on all rows for functions that cannot
+    /// throw, or filter/expand otherwise.
+    virtual void executeWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter & mask) const;
+
     using Monotonicity = IFunctionBase::Monotonicity;
     virtual Monotonicity getMonotonicityForRange(
         const IDataType & /*type*/,
@@ -366,6 +432,19 @@ public:
     }
 
     bool isSuitableForConstantFolding() const override { return function->isSuitableForConstantFolding(); }
+
+    bool isShortCircuit() const override { return function->isShortCircuit(); }
+    bool isSuitableForShortCircuitArgumentsExecution() const override
+    {
+        return function->isSuitableForShortCircuitArgumentsExecution();
+    }
+    bool canThrow() const override { return function->canThrow(); }
+
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
+    {
+        return function->executeWithMask(block, arguments, result, mask);
+    }
 
     bool isInjective(const Block & sample_block) override { return function->isInjective(sample_block); }
 

@@ -35,6 +35,28 @@
 
 namespace DB
 {
+Strings MPPTaskManager::dumpTasks()
+{
+    std::vector<MPPTaskPtr> tasks;
+    Strings result;
+    {
+        std::lock_guard lock(mu);
+        for (const auto & [query_id, query] : mpp_query_map)
+            for (const auto & [gather_id, gather] : query->mpp_gathers)
+                gather->forEachMPPTask([&](const auto & entry) {
+                    if (entry.second)
+                        tasks.push_back(entry.second);
+                    else
+                        result.push_back(fmt::format("mpp_task={} status=NOT_ACTIVE", entry.first.toString()));
+                });
+    }
+    // Keep tasks alive, but never acquire executor locks under the manager lock.
+    result.reserve(result.size() + tasks.size());
+    for (const auto & task : tasks)
+        result.push_back(task->dumpExecutionState());
+    return result;
+}
+
 namespace FailPoints
 {
 extern const char random_task_manager_find_task_failure_failpoint[];
@@ -447,6 +469,25 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
             task->id.gather_id.query_id,
             task->id.gather_id.hasMeaningfulGatherId(),
             task->context->getSettingsRef().auto_spill_check_min_interval_ms);
+    /// Enforce one resource group per query: the first registered task establishes the
+    /// canonical group, and any later task with a different group is rejected here, before
+    /// it can reach the scheduler, tunnels or CTEs. This keeps scheduler thread accounting
+    /// and tunnel lookup within a single group even though the group is not part of the
+    /// query identity.
+    if (query->resource_group_name.has_value())
+    {
+        if (*query->resource_group_name != task->id.gather_id.query_id.resource_group_name)
+            return {
+                false,
+                fmt::format(
+                    "task resource group name '{}' does not match the query's resource group name '{}'",
+                    task->id.gather_id.query_id.resource_group_name,
+                    *query->resource_group_name)};
+    }
+    else
+    {
+        query->resource_group_name = task->id.gather_id.query_id.resource_group_name;
+    }
     if (query->process_list_entry == nullptr)
     {
         query->process_list_entry = setProcessListElement(
