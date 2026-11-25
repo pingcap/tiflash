@@ -37,5 +37,27 @@ TEST(DAGContextTest, FlagsTest)
     ASSERT_EQ(context.getFlags(), f);
 }
 
+TEST(DAGContextTest, MergeWarningsPreservesTotalAcrossExchanges)
+{
+    DAGContext sender(2);
+    sender.appendWarning("first", 1406);
+    sender.appendWarning("second", 1406);
+    sender.appendWarning("dropped by sender", 1406);
+    tipb::SelectResponse first_hop;
+    sender.fillWarnings(first_hop);
+    ASSERT_EQ(first_hop.warnings_size(), 2);
+    ASSERT_EQ(first_hop.warning_count(), 3);
+
+    DAGContext receiver(2);
+    receiver.appendWarning("local", 1406);
+    receiver.mergeWarnings(first_hop);
+    tipb::SelectResponse second_hop;
+    receiver.fillWarnings(second_hop);
+    ASSERT_EQ(second_hop.warnings_size(), 2);
+    EXPECT_EQ(second_hop.warning_count(), 4);
+    EXPECT_EQ(second_hop.warnings(0).msg(), "local");
+    EXPECT_EQ(second_hop.warnings(1).msg(), "first");
+}
+
 } // namespace tests
 } // namespace DB
