@@ -226,9 +226,7 @@ public:
         for (const auto & warning : response.warnings())
             appendWarning(warning);
         if (response.warning_count() > response.warnings_size())
-            warning_count.fetch_add(
-                response.warning_count() - response.warnings_size(),
-                std::memory_order_acq_rel);
+            warning_count.fetch_add(response.warning_count() - response.warnings_size(), std::memory_order_acq_rel);
     }
     /// Consume all warnings. Once this method called, every warning will be cleared.
     /// This method is not thread-safe.
