@@ -873,8 +873,9 @@ async fn request_snapshot_from_leader(
                 let mut cs = kvenginepb::ChangeSet::default();
                 cs.merge_from_bytes(&snap_bytes).unwrap();
                 info!(
-                    "{} request_snapshot_from_leader, cache_hit: {}, resp size: {}, memtable size: {}, snapshot size: {}, cost: {:?}",
+                    "{} request_snapshot_from_leader, uri: {}, cache_hit: {}, resp size: {}, memtable size: {}, snapshot size: {}, cost: {:?}",
                     tag,
+                    uri_str,
                     cache_valid,
                     snap_data.len(),
                     delegate_resp.get_mem_table_data().len(),
