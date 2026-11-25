@@ -14,10 +14,13 @@
 
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
+#include <Common/PODArray.h>
+#include <DataTypes/DataTypeString.h>
 #include <Debug/MockKVStore/MockSSTGenerator.h>
 #include <Debug/MockKVStore/MockUtils.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgTools.h>
+#include <Poco/TemporaryFile.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
@@ -26,6 +29,8 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/RegionQueryInfo.h>
+#include <TiDB/Decode/RowCodec.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/config_common.h> // Included for `USE_JEMALLOC`
 
 extern std::shared_ptr<MemoryTracker> root_of_kvstore_mem_trackers;
@@ -36,6 +41,217 @@ namespace DB::tests
 {
 using namespace DB::RecordKVFormat;
 
+class RaftApplyMemoryDeathTest : public RegionKVStoreTest
+{
+protected:
+    void SetUp() override
+    {
+        ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+        if (const char * previous = std::getenv("TIFLASH_TEMP_DIR"))
+            previous_dir = previous;
+        ASSERT_EQ(setenv("TIFLASH_TEMP_DIR", child_dir.path().c_str(), 1), 0);
+    }
+
+    void TearDown() override
+    {
+        if (previous_dir)
+            setenv("TIFLASH_TEMP_DIR", previous_dir->c_str(), 1);
+        else
+            unsetenv("TIFLASH_TEMP_DIR");
+    }
+
+    void checkApply();
+
+private:
+    Poco::TemporaryFile child_dir{TiFlashTestEnv::getTemporaryPath()};
+    std::optional<String> previous_dir;
+};
+
+TEST_F(RaftApplyMemoryDeathTest, FatalMessage)
+{
+    ASSERT_EXIT(
+        {
+            Poco::Logger::get("HandleWriteRaftCmd").setLevel(0);
+            EngineStoreServerWrap server{};
+            HandleWriteRaftCmd(&server, {}, {});
+        },
+        ::testing::ExitedWithCode(255),
+        "Fatal Raft apply error in HandleWriteRaftCmd: .*server->tmt != nullptr");
+}
+
+TEST_F(RaftApplyMemoryDeathTest, SharedColumnRssLimit)
+{
+    ASSERT_EXIT(
+        {
+            RegionKVStoreTest::SetUp();
+            checkApply();
+            const auto * result = ::testing::UnitTest::GetInstance()->current_test_info()->result();
+            for (int part = 0; part < result->total_part_count(); ++part)
+                if (const auto & check = result->GetTestPartResult(part); check.failed())
+                    std::cerr << check.file_name() << ':' << check.line_number() << " " << check.summary() << '\n';
+            std::_Exit(HasFailure() ? 1 : 0);
+        },
+        ::testing::ExitedWithCode(0),
+        "");
+}
+
+void RaftApplyMemoryDeathTest::checkApply()
+{
+    constexpr Int64 quota = 128 * 1024 * 1024;
+    constexpr Int64 payload_size = 2 * 1024 * 1024;
+    ASSERT_EQ(current_memory_tracker, nullptr);
+    initStorageMemoryTracker(quota, 0);
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    auto & tmt = ctx.getTMTContext();
+    initStorages();
+    tmt.debugSetKVStore(kvstore);
+    ctx.getSettingsRef().dt_segment_delta_cache_limit_size = quota;
+    auto & tidb = MockTiDB::instance();
+    const String database = "raft_apply_memory";
+    tidb.newDataBase(database);
+    ColumnsDescription columns;
+    columns.ordinary.emplace_back("payload", std::make_shared<DataTypeString>());
+    const auto table_id = tidb.newTable(database, "t", columns, tmt.getPDClient()->getTS(), "");
+    tmt.getSchemaSyncerManager()->syncSchemas(ctx, NullspaceID);
+    tmt.getSchemaSyncerManager()->syncTableSchema(ctx, NullspaceID, table_id);
+
+    constexpr RegionID region_id = 1;
+    proxy_instance->debugAddRegions(
+        *kvstore,
+        tmt,
+        {region_id},
+        {{genTableRecordStartKey(table_id), genTableRecordEndKey(table_id)}});
+    auto region = kvstore->getRegion(region_id);
+    auto key = genKey(table_id, 1, 111);
+    const String payload(payload_size, 'a');
+    WriteBufferFromOwnString buffer;
+    encodeRowV1(*tidb.getTableInfoByID(table_id), {Field(payload)}, buffer);
+    const auto encoded = buffer.releaseStr();
+    const auto commit = encodeWriteCfValue(CFModifyFlag::PutFlag, 111).toString();
+    auto [view, holder] = MockRaftStoreProxy::createWriteCmdsView(
+        {key, key},
+        {encoded, commit},
+        {WriteCmdType::Put, WriteCmdType::Put},
+        {ColumnFamilyType::Default, ColumnFamilyType::Write});
+    kvstore->debugGetConfigMut().debugSetCompactLogConfig(0, 0, 0, 0);
+    EngineStoreServerWrap server{.tmt = &tmt};
+    auto index = region->appliedIndex();
+    baseline_of_query_mem_tracker = 0;
+    real_rss_file = 0;
+    real_rss = quota + 1;
+    auto check_limit = [&] {
+        ASSERT_EQ(current_memory_tracker, nullptr);
+        ASSERT_LT(sub_root_of_query_storage_task_mem_trackers->get() + payload_size, quota);
+        EXPECT_THROW((PaddedPODArray<char>(payload_size)), TiFlashException);
+    };
+    auto write = [&] {
+        ASSERT_EQ(HandleWriteRaftCmd(&server, view, {region_id, ++index, 6}), EngineStoreApplyRes::None);
+        ASSERT_EQ(kvstore->getRegion(region_id)->appliedIndex(), index);
+        EXPECT_GE(shared_column_data_mem_tracker->get(), payload_size);
+        check_limit();
+    };
+    auto read_rows = [&](size_t expected) {
+        real_rss = 0;
+        SCOPE_EXIT({ real_rss = quota + 1; });
+        auto storage = std::dynamic_pointer_cast<StorageDeltaMerge>(tmt.getStorages().get(NullspaceID, table_id));
+        auto store = storage->getStore();
+        auto streams = store->read(
+            ctx,
+            ctx.getSettingsRef(),
+            store->getTableColumns(),
+            {DM::RowKeyRange::newAll(false, 1)},
+            1,
+            std::numeric_limits<UInt64>::max(),
+            nullptr,
+            {},
+            0,
+            "raft_apply_memory");
+        size_t rows = 0;
+        for (auto & stream : streams)
+        {
+            stream->readPrefix();
+            while (auto block = stream->read())
+                for (size_t row = 0; row < block.rows(); ++row)
+                {
+                    EXPECT_TRUE((*block.getByName("payload").column)[row].safeGet<String>() == payload);
+                    ++rows;
+                }
+            stream->readSuffix();
+        }
+        EXPECT_EQ(rows, expected);
+    };
+
+    write();
+    const auto peak = shared_column_data_mem_tracker->getPeak();
+    ASSERT_TRUE(TryFlushData(&server, region_id, 1, ++index, 6, 0, 0));
+    EXPECT_EQ(region->appliedIndex(), index);
+    EXPECT_GT(shared_column_data_mem_tracker->getPeak(), peak);
+    check_limit();
+    read_rows(1);
+
+    write();
+    raft_cmdpb::AdminRequest request;
+    request.set_cmd_type(raft_cmdpb::PrepareFlashback);
+    raft_cmdpb::AdminResponse response;
+    response.set_cmd_type(request.cmd_type());
+    const auto req = request.SerializeAsString();
+    const auto resp = response.SerializeAsString();
+    ASSERT_EQ(
+        HandleAdminRaftCmd(&server, strIntoView(&req), strIntoView(&resp), {region_id, ++index, 6}),
+        EngineStoreApplyRes::Persist);
+    EXPECT_EQ(region->appliedIndex(), index);
+    check_limit();
+
+    MockSSTGenerator defaults(region_id, table_id, ColumnFamilyType::Default);
+    MockSSTGenerator writes(region_id, table_id, ColumnFamilyType::Write);
+    const auto ingest_key = genKey(table_id, 2, 111).toString();
+    defaults.insert_raw(ingest_key, encoded);
+    writes.insert_raw(ingest_key, commit);
+    defaults.finish_file();
+    writes.finish_file();
+    defaults.freeze();
+    writes.freeze();
+    const std::array ssts{defaults.ssts().front(), writes.ssts().front()};
+    const SSTViewVec snaps{ssts.data(), ssts.size()};
+    write();
+    ASSERT_EQ(HandleIngestSST(&server, snaps, {region_id, ++index, 6}), EngineStoreApplyRes::Persist);
+    EXPECT_EQ(region->appliedIndex(), index);
+    check_limit();
+    read_rows(2);
+
+    write();
+    const auto meta = region->cloneMetaRegion();
+    const auto peer = region->dumpRegionMetaSnapshot().peer.id();
+    const auto snapshot_region
+        = kvstore->genRegionPtr(region->cloneMetaRegion(), peer, ++index, 6, tmt.getRegionTable());
+    try
+    {
+        kvstore->preHandleSnapshotToFiles(snapshot_region, snaps, index, 6, std::nullopt, tmt);
+        ADD_FAILURE() << "Snapshot prehandle accepted an over-quota allocation";
+    }
+    catch (const Exception & error)
+    {
+        EXPECT_NE(error.message().find("RSS(Resident Set Size) much larger than limit"), String::npos)
+            << error.message();
+    }
+    real_rss = 0;
+    auto proxy_region = proxy_instance->getRegion(region_id);
+    auto state = proxy_region->getState();
+    state.set_state(raft_serverpb::PeerState::Applying);
+    proxy_region->setState(std::move(state));
+    const auto region_data = meta.SerializeAsString();
+    const auto snapshot = PreHandleSnapshot(&server, strIntoView(&region_data), peer, snaps, index, 6);
+    real_rss = quota + 1;
+    ApplyPreHandledSnapshot(&server, snapshot.ptr, snapshot.type);
+    GcRawCppPtr(snapshot.ptr, snapshot.type);
+    EXPECT_EQ(kvstore->getRegion(region_id)->appliedIndex(), index);
+    check_limit();
+    read_rows(1);
+    write();
+    HandleDestroy(&server, region_id);
+    EXPECT_EQ(kvstore->getRegion(region_id), nullptr);
+    check_limit();
+}
 
 TEST_F(RegionKVStoreTest, MemoryTracker1)
 try

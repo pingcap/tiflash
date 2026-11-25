@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/MemoryTracker.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/nocopyable.h>
 #include <Interpreters/Context.h>
@@ -30,7 +31,10 @@
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <kvproto/diagnosticspb.pb.h>
+#include <unistd.h>
 
+#include <cstdio>
+#include <cstdlib>
 #include <ext/scope_guard.h>
 
 #define CHECK_PARSE_PB_BUFF_IMPL(n, a, b, c)                                              \
@@ -91,8 +95,31 @@ static_assert(alignof(EngineStoreServerHelper) == alignof(RawVoidPtr));
 static_assert(sizeof(RaftStoreProxyPtr) == sizeof(ConstRawVoidPtr));
 static_assert(alignof(RaftStoreProxyPtr) == alignof(ConstRawVoidPtr));
 
+[[noreturn]] void exitOnRaftApplyException(const char * callback, const String & context) noexcept
+{
+    tryLogCurrentFatalException(callback, context);
+    try
+    {
+        throw;
+    }
+    catch (const Poco::Exception & exception)
+    {
+        dprintf(STDERR_FILENO, "Fatal Raft apply error in %s: %.2048s\n", callback, exception.message().c_str());
+    }
+    catch (const std::exception & exception)
+    {
+        dprintf(STDERR_FILENO, "Fatal Raft apply error in %s: %.2048s\n", callback, exception.what());
+    }
+    catch (...)
+    {
+        dprintf(STDERR_FILENO, "Unknown fatal Raft apply error in %s\n", callback);
+    }
+    std::_Exit(-1);
+}
+
 EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server, WriteCmdsView cmds, RaftCmdHeader header)
 {
+    CurrentMemoryTracker::ScopedDisableAllocationLimits allow_raft_apply;
     try
     {
         RUNTIME_CHECK(server->tmt != nullptr);
@@ -101,8 +128,7 @@ EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server, Wri
     }
     catch (...)
     {
-        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
-        exit(-1);
+        exitOnRaftApplyException(__FUNCTION__);
     }
 }
 
@@ -120,6 +146,7 @@ EngineStoreApplyRes HandleAdminRaftCmd(
         CHECK_PARSE_PB_BUFF(request, req_buff.data, req_buff.len);
         CHECK_PARSE_PB_BUFF(response, resp_buff.data, resp_buff.len);
         auto & kvstore = server->tmt->getKVStore();
+        CurrentMemoryTracker::ScopedDisableAllocationLimits allow_raft_apply;
         return kvstore->handleAdminRaftCmd(
             std::move(request),
             std::move(response),
@@ -130,8 +157,7 @@ EngineStoreApplyRes HandleAdminRaftCmd(
     }
     catch (...)
     {
-        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
-        exit(-1);
+        exitOnRaftApplyException(__FUNCTION__);
     }
 }
 
@@ -159,6 +185,7 @@ uint8_t TryFlushData(
     uint64_t truncated_index,
     uint64_t truncated_term)
 {
+    CurrentMemoryTracker::ScopedDisableAllocationLimits allow_raft_flush;
     try
     {
         RUNTIME_CHECK(server->tmt != nullptr);
@@ -175,8 +202,7 @@ uint8_t TryFlushData(
     }
     catch (...)
     {
-        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
-        exit(-1);
+        exitOnRaftApplyException(__FUNCTION__);
     }
 }
 
@@ -475,13 +501,13 @@ void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id)
         RUNTIME_CHECK(server->tmt != nullptr);
         auto & kvstore = server->tmt->getKVStore();
         Stopwatch watch;
+        CurrentMemoryTracker::ScopedDisableAllocationLimits allow_raft_apply;
         kvstore->handleDestroy(region_id, *server->tmt);
         GET_METRIC(tiflash_raft_command_duration_seconds, type_remove_peer).Observe(watch.elapsedSeconds());
     }
     catch (...)
     {
-        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
-        exit(-1);
+        exitOnRaftApplyException(__FUNCTION__);
     }
 }
 
@@ -491,12 +517,12 @@ EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec s
     {
         RUNTIME_CHECK(server->tmt != nullptr);
         auto & kvstore = server->tmt->getKVStore();
+        CurrentMemoryTracker::ScopedDisableAllocationLimits allow_raft_apply;
         return kvstore->handleIngestSST(header.region_id, snaps, header.index, header.term, *server->tmt);
     }
     catch (...)
     {
-        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
-        exit(-1);
+        exitOnRaftApplyException(__FUNCTION__);
     }
 }
 
@@ -707,34 +733,24 @@ RawCppPtr PreHandleSnapshot(
 
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, RawCppPtrType type)
 {
-    switch (static_cast<RawCppPtrTypeImpl>(type))
+    try
     {
-    case RawCppPtrTypeImpl::PreHandledSnapshotWithFiles:
-    {
+        RUNTIME_CHECK(static_cast<RawCppPtrTypeImpl>(type) == RawCppPtrTypeImpl::PreHandledSnapshotWithFiles);
         auto * snap = reinterpret_cast<PreHandledSnapshotWithFiles *>(res);
-        try
-        {
-            RUNTIME_CHECK(server->tmt != nullptr);
-            auto & kvstore = server->tmt->getKVStore();
-            kvstore->applyPreHandledSnapshot(
-                RegionPtrWithSnapshotFiles{snap->region, std::move(snap->prehandle_result.ingest_ids)},
-                *server->tmt);
-            uint64_t end_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                    std::chrono::system_clock::now().time_since_epoch())
-                                    .count();
-            double elapsed = (end_time - snap->prehandle_result.stats.start_time) / 1000.0;
-            GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_total).Observe(elapsed);
-        }
-        catch (...)
-        {
-            tryLogCurrentFatalException(__PRETTY_FUNCTION__);
-            exit(-1);
-        }
-        break;
+        RUNTIME_CHECK(server->tmt != nullptr);
+        auto & kvstore = server->tmt->getKVStore();
+        kvstore->applyPreHandledSnapshot(
+            RegionPtrWithSnapshotFiles{snap->region, std::move(snap->prehandle_result.ingest_ids)},
+            *server->tmt);
+        uint64_t end_time
+            = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+                  .count();
+        double elapsed = (end_time - snap->prehandle_result.stats.start_time) / 1000.0;
+        GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_total).Observe(elapsed);
     }
-    default:
-        LOG_FATAL(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
-        exit(-1);
+    catch (...)
+    {
+        exitOnRaftApplyException(__FUNCTION__);
     }
 }
 

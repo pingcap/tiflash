@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/MemoryTracker.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
@@ -348,6 +349,7 @@ void KVStore::onSnapshot(
 template <typename RegionPtrWrap>
 void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
 {
+    CurrentMemoryTracker::ScopedDisableAllocationLimits allow_raft_apply;
     auto keyspace_id = new_region->getKeyspaceID();
     auto table_id = new_region->getMappedTableID();
     try

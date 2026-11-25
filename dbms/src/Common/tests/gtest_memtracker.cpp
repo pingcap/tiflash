@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/MemoryTracker.h>
+#include <Common/MemoryTrackerSetter.h>
 #include <Common/TiFlashMetrics.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -65,6 +66,31 @@ try
     ASSERT_EQ(0, root_mem_tracker->get());
 }
 CATCH
+
+TEST_F(MemTrackerTest, ScopedAllocationLimitsPreserveAccounting)
+{
+    constexpr Int64 chunk = 2 * 1024 * 1024;
+    auto root = MemoryTracker::create(1);
+    auto child = MemoryTracker::create(0, root.get());
+    MemoryTrackerSetter setter(true, root.get());
+    EXPECT_THROW(CurrentMemoryTracker::alloc(chunk), TiFlashException);
+    {
+        CurrentMemoryTracker::ScopedDisableAllocationLimits outer;
+        {
+            MemoryTrackerSetter switch_tracker(true, child.get());
+            CurrentMemoryTracker::ScopedDisableAllocationLimits inner;
+            CurrentMemoryTracker::alloc(chunk);
+            EXPECT_EQ(child->get(), chunk);
+            EXPECT_EQ(root->get(), chunk);
+            CurrentMemoryTracker::free(chunk);
+        }
+        CurrentMemoryTracker::alloc(chunk);
+        EXPECT_EQ(root->get(), chunk);
+        CurrentMemoryTracker::free(chunk);
+    }
+    EXPECT_THROW(CurrentMemoryTracker::alloc(chunk), TiFlashException);
+    EXPECT_EQ(root->get(), 0);
+}
 
 TEST_F(MemTrackerTest, testRootAndMultipleChild)
 try
