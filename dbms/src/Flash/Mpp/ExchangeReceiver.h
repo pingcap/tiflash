@@ -29,6 +29,7 @@ namespace DB
 {
 constexpr Int32 batch_packet_count_v1 = 16;
 struct Settings;
+class DAGContext;
 
 struct ExchangeReceiverResult
 {
@@ -109,7 +110,8 @@ public:
         const String & req_id,
         const String & executor_id,
         uint64_t fine_grained_shuffle_stream_count,
-        const Settings & settings);
+        const Settings & settings,
+        DAGContext * warning_context_ = nullptr);
 
     ~ExchangeReceiverBase();
 
@@ -200,6 +202,7 @@ private:
     LoggerPtr exc_log;
 
     std::shared_ptr<RPCContext> rpc_context;
+    DAGContext * const warning_context;
 
     const tipb::ExchangeReceiver pb_exchange_receiver;
     const size_t source_num;

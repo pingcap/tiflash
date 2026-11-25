@@ -27,6 +27,7 @@
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
@@ -192,9 +193,17 @@ void MPPTask::abortQueryExecutor()
 void MPPTask::finishWrite()
 {
     RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
-    if (dag_context->collect_execution_summaries
-        && !ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
-        tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
+    const bool send_summaries = dag_context->collect_execution_summaries
+        && !ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary());
+    const bool send_warnings = meta.mpp_version() >= MppVersionV3 && dag_context->getWarningCount() > 0;
+    if (send_summaries || send_warnings)
+    {
+        auto response = send_summaries ? mpp_task_statistics.genExecutionSummaryResponse() : tipb::SelectResponse{};
+        if (send_warnings)
+            dag_context->fillWarnings(response);
+        // Each task forwards warnings once through its downstream exchange.
+        tunnel_set->sendExecutionSummary(response);
+    }
     tunnel_set->finishWrite();
 }
 
@@ -285,7 +294,8 @@ void MPPTask::initExchangeReceivers()
                     log->identifier(),
                     executor_id,
                     executor.fine_grained_shuffle_stream_count(),
-                    context->getSettingsRef());
+                    context->getSettingsRef(),
+                    meta.mpp_version() >= MppVersionV3 ? dag_context.get() : nullptr);
 
                 receiver_set_local->addExchangeReceiver(executor_id, exchange_receiver);
 
