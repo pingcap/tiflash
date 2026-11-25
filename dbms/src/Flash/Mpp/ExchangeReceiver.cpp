@@ -18,6 +18,7 @@
 #include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
@@ -318,9 +319,11 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     const String & req_id,
     const String & executor_id,
     uint64_t fine_grained_shuffle_stream_count_,
-    const Settings & settings)
+    const Settings & settings,
+    DAGContext * warning_context_)
     : exc_log(Logger::get(req_id, executor_id))
     , rpc_context(std::move(rpc_context_))
+    , warning_context(warning_context_)
     , source_num(source_num_)
     , enable_fine_grained_shuffle_flag(fineGrainedShuffleEnabled(fine_grained_shuffle_stream_count_))
     , output_stream_count(
@@ -892,6 +895,9 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
         }
         else
         {
+            if (warning_context != nullptr)
+                for (const auto & warning : select_resp->warnings())
+                    warning_context->appendWarning(warning);
             auto result
                 = ExchangeReceiverResult::newOk(select_resp, recv_msg->getSourceIndex(), recv_msg->getReqInfo());
             /// If mocking TiFlash as TiDB, we should decode chunks from select_resp.

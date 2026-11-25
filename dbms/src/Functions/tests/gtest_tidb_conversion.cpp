@@ -650,6 +650,29 @@ try
 }
 CATCH
 
+TEST_F(TestTidbConversion, castVirtualGeneratedTextAtByteLimit)
+{
+    const String prefix = "fagor" + String(65528, ' ');
+    const String overflow = prefix + "\xe2\xb1\xa5";
+    const String exact_fit = "x" + String(65531, ' ') + "\xe2\xb1\xa5";
+
+    tipb::FieldType target;
+    target.set_tp(TiDB::TypeBlob);
+    target.set_charset("utf8mb4");
+    target.set_flen(65535);
+    const auto input = createColumn<String>({overflow, exact_fit, "small"});
+
+    auto cast = [&] {
+        Block block({input, {nullptr, input.type, "result"}});
+        TiDBConvertToString<DataTypeString, false>::execute(block, {0}, 1, false, target, *context);
+        return block.getByPosition(1);
+    };
+
+    ASSERT_COLUMN_EQ(input, cast()); // Ordinary UTF-8 CAST counts characters.
+    target.set_flag(TiDB::ColumnFlagGeneratedColumn);
+    ASSERT_COLUMN_EQ(createColumn<String>({prefix, exact_fit, "small"}), cast());
+}
+
 TEST_F(TestTidbConversion, castIntAsDecimal)
 try
 {
