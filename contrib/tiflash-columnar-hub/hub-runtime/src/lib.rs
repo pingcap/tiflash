@@ -30,6 +30,12 @@ macro_rules! info {
     }};
 }
 
+macro_rules! debug {
+    ($($args:tt)+) => {{
+        ::slog::debug!(&**::slog_global::borrow_global(), $($args)+)
+    }};
+}
+
 mod basic_ffi_impls;
 mod cloud_helper;
 mod columnar_impls;
