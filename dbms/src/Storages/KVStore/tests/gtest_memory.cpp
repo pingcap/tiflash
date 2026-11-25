@@ -15,8 +15,10 @@
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Common/PODArray.h>
+#include <Common/setThreadName.h>
 #include <DataTypes/DataTypeString.h>
 #include <Debug/MockKVStore/MockSSTGenerator.h>
+#include <Debug/MockKVStore/MockSSTReader.h>
 #include <Debug/MockKVStore/MockUtils.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgTools.h>
@@ -60,7 +62,7 @@ protected:
             unsetenv("TIFLASH_TEMP_DIR");
     }
 
-    void checkApply();
+    void checkApply(bool parallel_ingest = false);
 
 private:
     Poco::TemporaryFile child_dir{TiFlashTestEnv::getTemporaryPath()};
@@ -95,9 +97,25 @@ TEST_F(RaftApplyMemoryDeathTest, SharedColumnRssLimit)
         "");
 }
 
-void RaftApplyMemoryDeathTest::checkApply()
+TEST_F(RaftApplyMemoryDeathTest, ParallelIngestSharedColumnRssLimit)
 {
-    constexpr Int64 quota = 128 * 1024 * 1024;
+    ASSERT_EXIT(
+        {
+            RegionKVStoreTest::SetUp();
+            checkApply(true);
+            const auto * result = ::testing::UnitTest::GetInstance()->current_test_info()->result();
+            for (int part = 0; part < result->total_part_count(); ++part)
+                if (const auto & check = result->GetTestPartResult(part); check.failed())
+                    std::cerr << check.file_name() << ':' << check.line_number() << " " << check.summary() << '\n';
+            std::_Exit(HasFailure() ? 1 : 0);
+        },
+        ::testing::ExitedWithCode(0),
+        "");
+}
+
+void RaftApplyMemoryDeathTest::checkApply(bool parallel_ingest)
+{
+    const Int64 quota = (parallel_ingest ? 256 : 128) * 1024 * 1024;
     constexpr Int64 payload_size = 2 * 1024 * 1024;
     ASSERT_EQ(current_memory_tracker, nullptr);
     initStorageMemoryTracker(quota, 0);
@@ -105,6 +123,13 @@ void RaftApplyMemoryDeathTest::checkApply()
     auto & tmt = ctx.getTMTContext();
     initStorages();
     tmt.debugSetKVStore(kvstore);
+    if (parallel_ingest)
+    {
+        proxy_instance->cluster_ver = RaftstoreVer::V2;
+        proxy_instance->proxy_config_string
+            = R"({"raftstore":{"snap-handle-pool-size":4,"apply-low-priority-pool-size":4},"server":{"engine-addr":"123"}})";
+        kvstore->fetchProxyConfig(proxy_helper.get());
+    }
     ctx.getSettingsRef().dt_segment_delta_cache_limit_size = quota;
     auto & tidb = MockTiDB::instance();
     const String database = "raft_apply_memory";
@@ -204,26 +229,64 @@ void RaftApplyMemoryDeathTest::checkApply()
 
     MockSSTGenerator defaults(region_id, table_id, ColumnFamilyType::Default);
     MockSSTGenerator writes(region_id, table_id, ColumnFamilyType::Write);
-    const auto ingest_key = genKey(table_id, 2, 111).toString();
-    defaults.insert_raw(ingest_key, encoded);
-    writes.insert_raw(ingest_key, commit);
+    const size_t ingest_rows = parallel_ingest ? 12 : 1;
+    for (size_t row = 0; row < ingest_rows; ++row)
+    {
+        const auto ingest_key = genKey(table_id, row + 2, 111).toString();
+        defaults.insert_raw(ingest_key, encoded);
+        writes.insert_raw(ingest_key, commit);
+    }
     defaults.finish_file();
     writes.finish_file();
     defaults.freeze();
     writes.freeze();
     const std::array ssts{defaults.ssts().front(), writes.ssts().front()};
     const SSTViewVec snaps{ssts.data(), ssts.size()};
+    static std::atomic<size_t> split_key_count{0};
+    static std::atomic<bool> probe_snapshot_workers{false};
+    static std::atomic<size_t> snapshot_worker_checks{0};
+    split_key_count = 0;
+    probe_snapshot_workers = false;
+    snapshot_worker_checks = 0;
+    if (parallel_ingest)
+    {
+        FailPointHelper::enableFailPoint(FailPoints::force_set_parallel_prehandle_threshold, size_t{0});
+        proxy_helper->sst_reader_interfaces.fn_get_split_keys = [](SSTReaderPtr reader, uint64_t parts) {
+            auto result = make_mock_sst_reader_interface().fn_get_split_keys(reader, parts);
+            split_key_count += result.len;
+            return result;
+        };
+        proxy_helper->sst_reader_interfaces.fn_get_sst_reader = [](SSTView sst, RaftStoreProxyPtr proxy) {
+            if (probe_snapshot_workers && getThreadName() == "para-pre-snap")
+            {
+                EXPECT_THROW((PaddedPODArray<char>(2 * 1024 * 1024)), TiFlashException);
+                ++snapshot_worker_checks;
+            }
+            return make_mock_sst_reader_interface().fn_get_sst_reader(sst, proxy);
+        };
+    }
+    SCOPE_EXIT({
+        if (parallel_ingest)
+            FailPointHelper::disableFailPoint(FailPoints::force_set_parallel_prehandle_threshold);
+    });
     write();
+    const auto ingest_peak = shared_column_data_mem_tracker->getPeak();
     ASSERT_EQ(HandleIngestSST(&server, snaps, {region_id, ++index, 6}), EngineStoreApplyRes::Persist);
     EXPECT_EQ(region->appliedIndex(), index);
+    if (parallel_ingest)
+    {
+        EXPECT_GT(shared_column_data_mem_tracker->getPeak(), ingest_peak);
+        EXPECT_EQ(split_key_count.load(), 3);
+    }
     check_limit();
-    read_rows(2);
+    read_rows(ingest_rows + 1);
 
     write();
     const auto meta = region->cloneMetaRegion();
     const auto peer = region->dumpRegionMetaSnapshot().peer.id();
     const auto snapshot_region
         = kvstore->genRegionPtr(region->cloneMetaRegion(), peer, ++index, 6, tmt.getRegionTable());
+    probe_snapshot_workers = parallel_ingest;
     try
     {
         kvstore->preHandleSnapshotToFiles(snapshot_region, snaps, index, 6, std::nullopt, tmt);
@@ -234,6 +297,9 @@ void RaftApplyMemoryDeathTest::checkApply()
         EXPECT_NE(error.message().find("RSS(Resident Set Size) much larger than limit"), String::npos)
             << error.message();
     }
+    probe_snapshot_workers = false;
+    if (parallel_ingest)
+        EXPECT_EQ(snapshot_worker_checks.load(), 6);
     real_rss = 0;
     auto proxy_region = proxy_instance->getRegion(region_id);
     auto state = proxy_region->getState();
@@ -246,7 +312,7 @@ void RaftApplyMemoryDeathTest::checkApply()
     GcRawCppPtr(snapshot.ptr, snapshot.type);
     EXPECT_EQ(kvstore->getRegion(region_id)->appliedIndex(), index);
     check_limit();
-    read_rows(1);
+    read_rows(ingest_rows);
     write();
     HandleDestroy(&server, region_id);
     EXPECT_EQ(kvstore->getRegion(region_id), nullptr);
