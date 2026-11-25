@@ -670,7 +670,21 @@ TEST_F(TestTidbConversion, castVirtualGeneratedTextAtByteLimit)
 
     ASSERT_COLUMN_EQ(input, cast()); // Ordinary UTF-8 CAST counts characters.
     target.set_flag(TiDB::ColumnFlagGeneratedColumn);
-    ASSERT_COLUMN_EQ(createColumn<String>({prefix, exact_fit, "small"}), cast());
+    const auto expected = createColumn<String>({prefix, exact_fit, "small"});
+    auto & dag = getDAGContext();
+    dag.setFlags(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    ASSERT_COLUMN_EQ(expected, cast());
+    EXPECT_EQ(dag.getWarningCount(), 1);
+    std::vector<tipb::Error> warnings;
+    dag.consumeWarnings(warnings);
+    ASSERT_EQ(warnings.size(), 1);
+    EXPECT_EQ(warnings[0].code(), 1406);
+    EXPECT_EQ(warnings[0].msg(), "Data Too Long, field len 65535, data len 65536");
+
+    dag.clearWarnings();
+    dag.addFlag(TiDBSQLFlags::IGNORE_TRUNCATE);
+    ASSERT_COLUMN_EQ(expected, cast());
+    EXPECT_EQ(dag.getWarningCount(), 0);
 }
 
 TEST_F(TestTidbConversion, castIntAsDecimal)

@@ -220,6 +220,16 @@ public:
             warnings.tryPush(warning);
         }
     }
+    /// Merge an upstream warning batch, including messages dropped by its retention limit.
+    void mergeWarnings(const tipb::SelectResponse & response)
+    {
+        for (const auto & warning : response.warnings())
+            appendWarning(warning);
+        if (response.warning_count() > response.warnings_size())
+            warning_count.fetch_add(
+                response.warning_count() - response.warnings_size(),
+                std::memory_order_acq_rel);
+    }
     /// Consume all warnings. Once this method called, every warning will be cleared.
     /// This method is not thread-safe.
     void consumeWarnings(std::vector<tipb::Error> & warnings_)

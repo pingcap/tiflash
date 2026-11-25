@@ -896,8 +896,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
         else
         {
             if (warning_context != nullptr)
-                for (const auto & warning : select_resp->warnings())
-                    warning_context->appendWarning(warning);
+                warning_context->mergeWarnings(*select_resp);
             auto result
                 = ExchangeReceiverResult::newOk(select_resp, recv_msg->getSourceIndex(), recv_msg->getReqInfo());
             /// If mocking TiFlash as TiDB, we should decode chunks from select_resp.
