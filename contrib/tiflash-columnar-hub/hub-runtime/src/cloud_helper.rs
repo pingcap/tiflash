@@ -883,8 +883,9 @@ async fn request_snapshot_from_leader(
                     elapsed,
                 );
                 debug!(
-                    "{} request_snapshot_from_leader snapshot: {:?}",
+                    "{} request_snapshot_from_leader, uri: {}, snapshot: {:?}",
                     tag,
+                    uri_str,
                     cs.get_snapshot(),
                 );
 
