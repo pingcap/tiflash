@@ -554,6 +554,8 @@ public:
     void TearDown() override
     {
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+        // Stop background GC before the fixture destroys the PathPool referenced by its disk delegator.
+        global_ctx.tryReleaseWriteNodePageStorageForTest();
         global_ctx.setPageStorageRunMode(old_run_mode);
     }
 
