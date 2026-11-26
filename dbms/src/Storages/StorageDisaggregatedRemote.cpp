@@ -705,6 +705,8 @@ std::tuple<std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr>, D
                 extra_table_id_index,
                 *final_columns_defines,
                 push_down_executor,
+                /*multi_stage_late_materialization_filter*/ nullptr,
+                /*multi_stage_late_materialization_runtime_stats*/ nullptr,
                 start_ts,
                 db_context.getSettingsRef().max_block_size,
                 read_mode,

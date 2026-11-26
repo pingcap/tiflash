@@ -16,6 +16,7 @@
 
 #include <Operators/Operator.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationRuntimeStats.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
@@ -35,6 +36,8 @@ public:
         DM::AfterSegmentRead after_segment_read_,
         const DM::ColumnDefines & columns_to_read_,
         const DM::PushDownExecutorPtr & executor_,
+        const DM::PushDownExecutorPtr & multi_stage_late_materialization_filter_,
+        const DM::MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats_,
         UInt64 start_ts_,
         size_t expected_block_size_,
         DM::ReadMode read_mode_,
@@ -57,6 +60,8 @@ private:
     DM::AfterSegmentRead after_segment_read;
     DM::ColumnDefines columns_to_read;
     DM::PushDownExecutorPtr executor;
+    DM::PushDownExecutorPtr multi_stage_late_materialization_filter;
+    DM::MultiStageLateMaterializationRuntimeStatsPtr multi_stage_late_materialization_runtime_stats;
     const UInt64 start_ts;
     const size_t expected_block_size;
     const DM::ReadMode read_mode;

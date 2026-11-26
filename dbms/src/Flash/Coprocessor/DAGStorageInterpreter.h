@@ -127,6 +127,8 @@ private:
 
     void prepare();
 
+    bool shouldEnableMultiStageLateMaterialization() const;
+
     void executeImpl(DAGPipeline & pipeline);
 
     void executeImpl(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder);
@@ -166,6 +168,7 @@ private:
     Names required_columns;
     // For generated column, just need a placeholder, and TiDB will fill this column.
     std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
+    bool enable_multi_stage_late_materialization = false;
 };
 
 } // namespace DB

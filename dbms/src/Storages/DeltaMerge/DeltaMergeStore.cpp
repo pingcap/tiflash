@@ -1096,6 +1096,8 @@ BlockInputStreams DeltaMergeStore::readRaw(
         extra_table_id_index,
         columns_to_read,
         EMPTY_FILTER,
+        EMPTY_FILTER,
+        nullptr,
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE,
         /* read_mode */ ReadMode::Raw,
@@ -1128,6 +1130,8 @@ BlockInputStreams DeltaMergeStore::readRaw(
                 after_segment_read,
                 columns_to_read,
                 EMPTY_FILTER,
+                EMPTY_FILTER,
+                nullptr,
                 std::numeric_limits<UInt64>::max(),
                 DEFAULT_BLOCK_SIZE,
                 /* read_mode */ ReadMode::Raw,
@@ -1202,6 +1206,8 @@ void DeltaMergeStore::readRaw(
         extra_table_id_index,
         columns_to_read,
         EMPTY_FILTER,
+        EMPTY_FILTER,
+        nullptr,
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE,
         /* read_mode */ ReadMode::Raw,
@@ -1237,6 +1243,8 @@ void DeltaMergeStore::readRaw(
                 after_segment_read,
                 columns_to_read,
                 EMPTY_FILTER,
+                EMPTY_FILTER,
+                nullptr,
                 std::numeric_limits<UInt64>::max(),
                 DEFAULT_BLOCK_SIZE,
                 /* read_mode */ ReadMode::Raw,
@@ -1330,11 +1338,15 @@ BlockInputStreams DeltaMergeStore::read(
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     auto read_mode = getReadMode(db_context, read_opts.is_fast_scan, read_opts.keep_order, executor);
     const auto & final_columns_to_read
-        = executor && executor->extra_cast ? *executor->columns_after_cast : columns_to_read;
+        = read_opts.multi_stage_late_materialization_filter == nullptr && executor && executor->extra_cast
+        ? *executor->columns_after_cast
+        : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         extra_table_id_index,
         final_columns_to_read,
         executor,
+        read_opts.multi_stage_late_materialization_filter,
+        read_opts.multi_stage_late_materialization_runtime_stats,
         start_ts,
         expected_block_size,
         read_mode,
@@ -1370,6 +1382,8 @@ BlockInputStreams DeltaMergeStore::read(
                 after_segment_read,
                 final_columns_to_read,
                 executor,
+                read_opts.multi_stage_late_materialization_filter,
+                read_opts.multi_stage_late_materialization_runtime_stats,
                 start_ts,
                 expected_block_size,
                 read_mode,
@@ -1382,13 +1396,14 @@ BlockInputStreams DeltaMergeStore::read(
     LOG_INFO(
         tracing_logger,
         "Read create stream done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
-        "is_fast_scan={} is_push_down_executor_empty={} pool_id={} num_streams={} columns_to_read={} "
-        "final_columns_to_read={}",
+        "is_fast_scan={} is_push_down_executor_empty={} multi_stage_late_materialization={} pool_id={} "
+        "num_streams={} columns_to_read={} final_columns_to_read={}",
         read_opts.keep_order,
         db_context.getSettingsRef().dt_enable_read_thread,
         enable_read_thread,
         read_opts.is_fast_scan,
         executor == nullptr || executor->before_where == nullptr,
+        read_opts.multi_stage_late_materialization_filter != nullptr,
         read_task_pool->pool_id,
         final_num_stream,
         columns_to_read,
@@ -1458,11 +1473,15 @@ void DeltaMergeStore::read(
     }
     auto read_mode = getReadMode(db_context, read_opts.is_fast_scan, read_opts.keep_order, executor);
     const auto & final_columns_to_read
-        = executor && executor->extra_cast ? *executor->columns_after_cast : columns_to_read;
+        = read_opts.multi_stage_late_materialization_filter == nullptr && executor && executor->extra_cast
+        ? *executor->columns_after_cast
+        : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         extra_table_id_index,
         final_columns_to_read,
         executor,
+        read_opts.multi_stage_late_materialization_filter,
+        read_opts.multi_stage_late_materialization_runtime_stats,
         start_ts,
         expected_block_size,
         read_mode,
@@ -1501,6 +1520,8 @@ void DeltaMergeStore::read(
                 after_segment_read,
                 final_columns_to_read,
                 executor,
+                read_opts.multi_stage_late_materialization_filter,
+                read_opts.multi_stage_late_materialization_runtime_stats,
                 start_ts,
                 expected_block_size,
                 read_mode,
@@ -1519,13 +1540,14 @@ void DeltaMergeStore::read(
     LOG_INFO(
         tracing_logger,
         "Read create PipelineExec done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
-        "is_fast_scan={} is_push_down_executor_empty={} pool_id={} num_streams={} columns_to_read={} "
-        "final_columns_to_read={}",
+        "is_fast_scan={} is_push_down_executor_empty={} multi_stage_late_materialization={} pool_id={} "
+        "num_streams={} columns_to_read={} final_columns_to_read={}",
         read_opts.keep_order,
         db_context.getSettingsRef().dt_enable_read_thread,
         enable_read_thread,
         read_opts.is_fast_scan,
         executor == nullptr || executor->before_where == nullptr,
+        read_opts.multi_stage_late_materialization_filter != nullptr,
         read_task_pool->pool_id,
         final_num_stream,
         columns_to_read,
