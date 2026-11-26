@@ -1,9 +1,16 @@
-# See the OWNERS docs at https://go.k8s.io/owners
+# See the OWNERS docs at https://www.kubernetes.dev/docs/guide/owners/#owners
+# The members of 'sig-community-*' are synced from memberships defined in repository: https://github.com/pingcap/community.
 approvers:
+  - CalvinNeo
+  - JaySon-Huang
+  - JinheLin
+  - Lloyd-Pottiger
+  - SchrodingerZhu
+  - SeaRise
+  - XuHuaiyu
   - bestwoody
   - birdstorm
   - breezewish
-  - CalvinNeo
   - flowbehappy
   - fuzhe1989
   - fzhedu
@@ -13,20 +20,15 @@ approvers:
   - hongyunyan
   - ichn-hu
   - ilovesoup
-  - JaySon-Huang
   - jiaqizho
-  - JinheLin
   - lidezhu
   - littlefall
-  - Lloyd-Pottiger
   - mengxin9014
-  - SchrodingerZhu
-  - SeaRise
   - solotzg
   - windtalker
   - wshwsh12
-  - XuHuaiyu
   - yibin87
+  - yongman
   - ywqzzy
   - zanmato1984
 reviewers:
