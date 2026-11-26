@@ -55,6 +55,9 @@ inline bool isRoughSetFilterSupportType(const Int32 field_type)
     case TiDB::TypeDatetime:
     case TiDB::TypeTimestamp: // For timestamp, should take time_zone into consideration while parsing `literal`
         return true;
+    case TiDB::TypeDecimal:
+    case TiDB::TypeNewDecimal:
+        return true;
     // For these types, should take collation into consideration. Disable them.
     case TiDB::TypeVarchar:
     case TiDB::TypeJSON:
@@ -67,8 +70,6 @@ inline bool isRoughSetFilterSupportType(const Int32 field_type)
         return false;
     // Unknown.
     case TiDB::TypeTiDBVectorFloat32:
-    case TiDB::TypeDecimal:
-    case TiDB::TypeNewDecimal:
     case TiDB::TypeFloat:
     case TiDB::TypeDouble:
     case TiDB::TypeNull:
@@ -118,11 +119,14 @@ inline RSOperatorPtr parseTiCompareExpr( //
     Attr attr;
     std::vector<Field> values;
     bool is_timestamp_column = false;
+    bool is_decimal_column = false;
     for (const auto & child : expr.children())
     {
         if (isColumnExpr(child))
         {
-            is_timestamp_column = (child.field_type().tp() == TiDB::TypeTimestamp);
+            const auto column_type = child.field_type().tp();
+            is_timestamp_column = (column_type == TiDB::TypeTimestamp);
+            is_decimal_column = (column_type == TiDB::TypeDecimal || column_type == TiDB::TypeNewDecimal);
             break;
         }
     }
@@ -158,6 +162,15 @@ inline RSOperatorPtr parseTiCompareExpr( //
         else if (isLiteralExpr(child))
         {
             Field value = decodeLiteral(child);
+            const bool is_decimal_literal = child.tp() == tipb::ExprType::MysqlDecimal;
+            if (!value.isNull() && is_decimal_column != is_decimal_literal)
+            {
+                return createUnsupported(fmt::format(
+                    "Mixed decimal comparison is not supported, sig={} column_decimal={} literal_type={}",
+                    tipb::ScalarFuncSig_Name(expr.sig()),
+                    is_decimal_column,
+                    tipb::ExprType_Name(child.tp())));
+            }
             if (is_timestamp_column)
             {
                 auto literal_type = child.field_type().tp();
