@@ -35,6 +35,7 @@
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
 
+#include <algorithm>
 #include <string_view>
 
 namespace DB::DM
@@ -283,6 +284,71 @@ MinMaxIndexPtr MinMaxIndex::withTimezone(
     return std::make_shared<MinMaxIndex>(std::move(nulls), std::move(values), std::move(column));
 }
 
+template <typename T, typename IsValidPack>
+RSResults MinMaxIndex::checkDecimalInImpl(
+    const IColumn & column,
+    size_t start_pack,
+    size_t pack_count,
+    const std::vector<Field> & values,
+    const DataTypePtr & type,
+    const IsValidPack & is_valid_pack,
+    RSResult invalid_pack_result)
+{
+    RSResults results(pack_count, RSResult::None);
+    const auto & minmaxes_data = details::minMaxColumnData<T>(column);
+    std::vector<size_t> active_packs;
+    active_packs.reserve(pack_count);
+    for (size_t i = start_pack; i < start_pack + pack_count; ++i)
+    {
+        if (is_valid_pack(i))
+            active_packs.push_back(i);
+    }
+    // Early exit on Some may skip a trailing NULL literal. Collect NULLs first so
+    // the final result preserves its NULL flag, including when used by NOT IN.
+    const bool has_null_value
+        = std::any_of(values.begin(), values.end(), [](const Field & value) { return value.isNull(); });
+    // Visit constants first so their type dispatch and scale alignment are outside the pack loop.
+    for (const auto & value : values)
+    {
+        if (active_packs.empty())
+            break;
+        if (value.isNull())
+            continue;
+        details::withPreparedDecimalComparison<T>(value, type, [&](const auto & comparison) {
+            size_t remaining_count = 0;
+            for (const auto i : active_packs)
+            {
+                auto & result = results[i - start_pack];
+                result = result
+                    || RoughCheck::CheckEqual::check<T>(
+                             comparison,
+                             type,
+                             minmaxes_data[i * 2],
+                             minmaxes_data[i * 2 + 1]);
+                // Some already means this pack may match, so further literals are unnecessary.
+                // When min != max, CheckEqual cannot yield All. If an unsupported comparison
+                // returns Some before a later All, retaining Some is conservative, even for NOT IN.
+                if (!result.isUse())
+                    active_packs[remaining_count++] = i;
+            }
+            active_packs.resize(remaining_count);
+        });
+    }
+    for (size_t i = start_pack; i < start_pack + pack_count; ++i)
+    {
+        auto & result = results[i - start_pack];
+        if (!is_valid_pack(i))
+        {
+            result = invalid_pack_result;
+            continue;
+        }
+        if (has_null_value)
+            result = result || RSResult::NoneNull;
+        result = addNullIfHasNull(result, i);
+    }
+    return results;
+}
+
 template <typename T>
 RSResults MinMaxIndex::checkNullableInImpl(
     const DB::ColumnNullable & column_nullable,
@@ -292,6 +358,16 @@ RSResults MinMaxIndex::checkNullableInImpl(
     const std::vector<Field> & values,
     const DataTypePtr & type)
 {
+    if constexpr (IsDecimal<T>)
+        return checkDecimalInImpl<T>(
+            *column_nullable.getNestedColumnPtr(),
+            start_pack,
+            pack_count,
+            values,
+            type,
+            [&](size_t i) { return !details::minIsNull(null_map, i); },
+            RSResult::SomeNull);
+
     RSResults results(pack_count, RSResult::SomeNull);
     const auto & minmaxes_data = details::minMaxColumnData<T>(*column_nullable.getNestedColumnPtr());
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
@@ -391,6 +467,16 @@ RSResults MinMaxIndex::checkInImpl(
     const std::vector<Field> & values,
     const DataTypePtr & type)
 {
+    if constexpr (IsDecimal<T>)
+        return checkDecimalInImpl<T>(
+            *minmaxes,
+            start_pack,
+            pack_count,
+            values,
+            type,
+            [&](size_t i) { return has_value_marks[i]; },
+            RSResult::None);
+
     RSResults results(pack_count, RSResult::None);
     const auto & minmaxes_data = details::minMaxColumnData<T>(*minmaxes);
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
@@ -470,15 +556,17 @@ RSResults MinMaxIndex::checkCmpImpl(size_t start_pack, size_t pack_count, const 
 {
     RSResults results(pack_count, RSResult::None);
     const auto & minmaxes_data = details::minMaxColumnData<T>(*minmaxes);
-    for (size_t i = start_pack; i < start_pack + pack_count; ++i)
-    {
-        if (!has_value_marks[i])
-            continue;
-        auto min = minmaxes_data[i * 2];
-        auto max = minmaxes_data[i * 2 + 1];
-        auto value_result = Op::template check<T>(value, type, min, max);
-        results[i - start_pack] = addNullIfHasNull(value_result, i);
-    }
+    details::withPreparedDecimalComparison<T>(value, type, [&](const auto & comparison) {
+        for (size_t i = start_pack; i < start_pack + pack_count; ++i)
+        {
+            if (!has_value_marks[i])
+                continue;
+            const auto & min = minmaxes_data[i * 2];
+            const auto & max = minmaxes_data[i * 2 + 1];
+            auto value_result = Op::template check<T>(comparison, type, min, max);
+            results[i - start_pack] = addNullIfHasNull(value_result, i);
+        }
+    });
     return results;
 }
 
@@ -576,27 +664,29 @@ RSResults MinMaxIndex::checkNullableNullEqualImpl(
     /// Default to Some: conservative when min/max cannot prove a tighter bound.
     RSResults results(pack_count, RSResult::Some);
     const auto & minmaxes_data = details::minMaxColumnData<T>(*column_nullable.getNestedColumnPtr());
-    for (size_t i = start_pack; i < start_pack + pack_count; ++i)
-    {
-        /// Min slot is NULL on indexes built before v6.4.0. For a pure-NULL pack,
-        /// `NULL <=> value` is false for every row, so the pack can be skipped.
-        if (details::minIsNull(null_map, i))
+    details::withPreparedDecimalComparison<T>(value, type, [&](const auto & comparison) {
+        for (size_t i = start_pack; i < start_pack + pack_count; ++i)
         {
-            if (has_null_marks[i] && !has_value_marks[i])
-                results[i - start_pack] = RSResult::None;
-            continue;
-        }
+            /// Min slot is NULL on indexes built before v6.4.0. For a pure-NULL pack,
+            /// `NULL <=> value` is false for every row, so the pack can be skipped.
+            if (details::minIsNull(null_map, i))
+            {
+                if (has_null_marks[i] && !has_value_marks[i])
+                    results[i - start_pack] = RSResult::None;
+                continue;
+            }
 
-        auto min = minmaxes_data[i * 2];
-        auto max = minmaxes_data[i * 2 + 1];
-        auto value_result = RoughCheck::CheckEqual::check<T>(value, type, min, max);
-        /// Non-null values may all equal `value`, but NULL rows still make `col <=> value` false.
-        /// Downgrade All => Some so the pack is read and filtered row by row.
-        if (has_null_marks[i] && value_result == RSResult::All)
-            results[i - start_pack] = RSResult::Some;
-        else
-            results[i - start_pack] = value_result;
-    }
+            const auto & min = minmaxes_data[i * 2];
+            const auto & max = minmaxes_data[i * 2 + 1];
+            auto value_result = RoughCheck::CheckEqual::check<T>(comparison, type, min, max);
+            /// Non-null values may all equal `value`, but NULL rows still make `col <=> value` false.
+            /// Downgrade All => Some so the pack is read and filtered row by row.
+            if (has_null_marks[i] && value_result == RSResult::All)
+                results[i - start_pack] = RSResult::Some;
+            else
+                results[i - start_pack] = value_result;
+        }
+    });
     return results;
 }
 
@@ -713,15 +803,17 @@ RSResults MinMaxIndex::checkNullableCmpImpl(
 {
     RSResults results(pack_count, RSResult::SomeNull);
     const auto & minmaxes_data = details::minMaxColumnData<T>(*column_nullable.getNestedColumnPtr());
-    for (size_t i = start_pack; i < start_pack + pack_count; ++i)
-    {
-        if (details::minIsNull(null_map, i))
-            continue;
-        auto min = minmaxes_data[i * 2];
-        auto max = minmaxes_data[i * 2 + 1];
-        auto value_result = Op::template check<T>(value, type, min, max);
-        results[i - start_pack] = addNullIfHasNull(value_result, i);
-    }
+    details::withPreparedDecimalComparison<T>(value, type, [&](const auto & comparison) {
+        for (size_t i = start_pack; i < start_pack + pack_count; ++i)
+        {
+            if (details::minIsNull(null_map, i))
+                continue;
+            const auto & min = minmaxes_data[i * 2];
+            const auto & max = minmaxes_data[i * 2 + 1];
+            auto value_result = Op::template check<T>(comparison, type, min, max);
+            results[i - start_pack] = addNullIfHasNull(value_result, i);
+        }
+    });
     return results;
 }
 

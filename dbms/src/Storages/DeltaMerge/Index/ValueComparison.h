@@ -28,6 +28,7 @@
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Storages/DeltaMerge/Index/PreparedDecimalComparison.h>
 
 
 namespace DB
@@ -62,6 +63,30 @@ struct ValueComparision
     using LessOrEqualsInt = LessOrEqualsOp<int, int>;
     using GreaterInt = GreaterOp<int, int>;
     using GreaterOrEqualsInt = GreaterOrEqualsOp<int, int>;
+
+    template <typename Right>
+    ALWAYS_INLINE static bool isLegal(const Field & left_field, const DataTypePtr & right_type, const Right & right)
+    {
+        return compare(left_field, right_type, right) != ValueCompareResult::CanNotCompare;
+    }
+
+    template <typename T, bool scale_column, typename Right>
+    static constexpr bool isLegal(
+        const PreparedDecimalComparison<T, scale_column> &,
+        const DataTypePtr &,
+        const Right &)
+    {
+        return true;
+    }
+
+    template <typename T, bool scale_column, typename Right>
+    ALWAYS_INLINE static ValueCompareResult compare(
+        const PreparedDecimalComparison<T, scale_column> & left,
+        const DataTypePtr &,
+        const Right & right)
+    {
+        return left.template compare<Op>(right) ? ValueCompareResult::True : ValueCompareResult::False;
+    }
 
     template <typename Right>
     static ValueCompareResult compare(const Field & left_field, const DataTypePtr & right_type, const Right & right)
