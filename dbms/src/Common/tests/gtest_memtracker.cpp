@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include <Common/MemoryTracker.h>
+#include <Common/MemoryTrackerSetter.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/UniThreadPool.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::tests
@@ -65,6 +67,70 @@ try
     ASSERT_EQ(0, root_mem_tracker->get());
 }
 CATCH
+
+TEST_F(MemTrackerTest, ScopedAllocationLimitsPreserveAccounting)
+{
+    constexpr Int64 chunk = 2 * 1024 * 1024;
+    auto root = MemoryTracker::create(1);
+    auto child = MemoryTracker::create(0, root.get());
+    MemoryTrackerSetter setter(true, root.get());
+    EXPECT_THROW(CurrentMemoryTracker::alloc(chunk), TiFlashException);
+    {
+        CurrentMemoryTracker::ScopedDisableAllocationLimits outer;
+        {
+            MemoryTrackerSetter switch_tracker(true, child.get());
+            CurrentMemoryTracker::ScopedDisableAllocationLimits inner;
+            CurrentMemoryTracker::alloc(chunk);
+            EXPECT_EQ(child->get(), chunk);
+            EXPECT_EQ(root->get(), chunk);
+            CurrentMemoryTracker::free(chunk);
+        }
+        CurrentMemoryTracker::alloc(chunk);
+        EXPECT_EQ(root->get(), chunk);
+        CurrentMemoryTracker::free(chunk);
+    }
+    EXPECT_THROW(CurrentMemoryTracker::alloc(chunk), TiFlashException);
+    EXPECT_EQ(root->get(), 0);
+}
+
+TEST_F(MemTrackerTest, ScopedAllocationLimitsRestoreOnWorkerReuse)
+{
+    constexpr Int64 chunk = 2 * 1024 * 1024;
+    auto root = MemoryTracker::create(1);
+    auto child = MemoryTracker::create(0, root.get());
+    ThreadPool pool(1, 1, 0);
+    std::thread::id worker_id;
+    pool.scheduleWithFuture([&] { worker_id = std::this_thread::get_id(); }).get();
+    for (bool throw_from_worker : {false, true})
+    {
+        auto work = pool.scheduleWithFuture([&] {
+            EXPECT_EQ(std::this_thread::get_id(), worker_id);
+            MemoryTrackerSetter setter(true, child.get());
+            EXPECT_THROW(CurrentMemoryTracker::alloc(chunk), TiFlashException);
+            CurrentMemoryTracker::ScopedDisableAllocationLimits scope;
+            CurrentMemoryTracker::alloc(chunk);
+            SCOPE_EXIT({ CurrentMemoryTracker::free(chunk); });
+            EXPECT_EQ(child->get(), chunk);
+            EXPECT_EQ(root->get(), chunk);
+            if (throw_from_worker)
+                throw Exception("Worker failure", ErrorCodes::LOGICAL_ERROR);
+        });
+        if (throw_from_worker)
+            EXPECT_THROW(work.get(), Exception);
+        else
+            EXPECT_NO_THROW(work.get());
+
+        pool.scheduleWithFuture([&] {
+                EXPECT_EQ(std::this_thread::get_id(), worker_id);
+                EXPECT_EQ(current_memory_tracker, nullptr);
+                MemoryTrackerSetter setter(true, child.get());
+                EXPECT_THROW(CurrentMemoryTracker::alloc(chunk), TiFlashException);
+                EXPECT_EQ(child->get(), 0);
+                EXPECT_EQ(root->get(), 0);
+            })
+            .get();
+    }
+}
 
 TEST_F(MemTrackerTest, testRootAndMultipleChild)
 try

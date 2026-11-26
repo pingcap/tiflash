@@ -43,6 +43,8 @@ struct TiFlashRaftProxyHelper;
 
 using String = std::string;
 
+[[noreturn]] void exitOnRaftApplyException(const char * callback, const String & context = {}) noexcept;
+
 struct EngineStoreServerWrap
 {
     TMTContext * tmt{nullptr};

@@ -418,13 +418,28 @@ static __thread Int64 local_delta{};
 static thread_local Int64 local_delta{};
 #endif
 
+static thread_local bool check_allocation_limits = true;
+
+ScopedDisableAllocationLimits::ScopedDisableAllocationLimits()
+    : previous(check_allocation_limits)
+{
+    submitLocalDeltaMemory();
+    check_allocation_limits = false;
+}
+
+ScopedDisableAllocationLimits::~ScopedDisableAllocationLimits()
+{
+    submitLocalDeltaMemory();
+    check_allocation_limits = previous;
+}
+
 __attribute__((always_inline)) inline void checkSubmitAndUpdateLocalDelta(Int64 updated_local_delta)
 {
     if (current_memory_tracker)
     {
         if (unlikely(updated_local_delta > MEMORY_TRACER_SUBMIT_THRESHOLD))
         {
-            current_memory_tracker->alloc(updated_local_delta);
+            current_memory_tracker->alloc(updated_local_delta, check_allocation_limits);
             local_delta = 0;
         }
         else if (unlikely(updated_local_delta < -MEMORY_TRACER_SUBMIT_THRESHOLD))

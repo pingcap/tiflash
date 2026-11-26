@@ -323,7 +323,7 @@ if (ENABLE_TESTS)
         # Google Test from sources
         add_subdirectory(${TiFlash_SOURCE_DIR}/contrib/googletest/googletest ${CMAKE_CURRENT_BINARY_DIR}/googletest)
         # avoid problems with <regexp.h>
-        target_compile_definitions (gtest INTERFACE GTEST_HAS_POSIX_RE=0)
+        target_compile_definitions (gtest PUBLIC GTEST_HAS_POSIX_RE=0)
         target_include_directories (gtest INTERFACE ${TiFlash_SOURCE_DIR}/contrib/googletest/googletest/include)
     endif ()
 

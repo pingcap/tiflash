@@ -14,6 +14,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
+#include <Common/MemoryTracker.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/setThreadName.h>
@@ -577,6 +578,11 @@ std::tuple<ReadFromStreamResult, PrehandleResult> executeParallelTransform(
     for (size_t split_id = 0; split_id < split_key_count; ++split_id)
     {
         auto add_result = async_tasks.addTask(split_id, [&, split_id]() {
+            // Joined SST ingest workers must finish committed Raft work under the same quota scope
+            // as the apply thread. Independent snapshot preparation still enforces allocation limits.
+            std::optional<CurrentMemoryTracker::ScopedDisableAllocationLimits> ingest_memory_scope;
+            if (prehandle_ctx.job_type == DM::FileConvertJobType::IngestSST)
+                ingest_memory_scope.emplace();
             std::string origin_name = getThreadName();
             SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
             setThreadName("para-pre-snap");

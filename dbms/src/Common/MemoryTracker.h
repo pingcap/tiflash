@@ -186,6 +186,16 @@ void initStorageMemoryTracker(Int64 limit, Int64 larger_than_limit);
 /// Convenience methods, that use current_memory_tracker if it is available.
 namespace CurrentMemoryTracker
 {
+class ScopedDisableAllocationLimits : private boost::noncopyable
+{
+public:
+    ScopedDisableAllocationLimits();
+    ~ScopedDisableAllocationLimits();
+
+private:
+    bool previous;
+};
+
 void disableThreshold();
 void submitLocalDeltaMemory();
 Int64 getLocalDeltaMemory();
