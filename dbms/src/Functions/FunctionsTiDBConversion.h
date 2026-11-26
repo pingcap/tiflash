@@ -22,6 +22,7 @@
 #include <Common/FieldVisitors.h>
 #include <Common/MyDuration.h>
 #include <Common/MyTime.h>
+#include <Common/UTF8Helpers.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
@@ -54,6 +55,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
 #include <TiDB/Collation/Collator.h>
+#include <TiDB/Schema/TiDB.h>
 #include <TiDB/Schema/TiDBTypes.h>
 
 #include <ext/collection_cast.h>
@@ -153,6 +155,10 @@ struct TiDBConvertToString
 
             WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
 
+            // MPP v3 uses the generated-column flag on CAST results for
+            // assignment to a virtual TEXT column.
+            const bool generated_text = tp.tp() == TiDB::TypeBlob && (tp.flag() & TiDB::ColumnFlagGeneratedColumn)
+                && tp.charset() == "utf8mb4";
             size_t current_offset = 0;
             for (size_t i = 0; i < size; i++)
             {
@@ -162,7 +168,14 @@ struct TiDBConvertToString
                 if (tp.flen() >= 0)
                 {
                     byte_length = tp.flen();
-                    if (tp.charset() == "utf8" || tp.charset() == "utf8mb4")
+                    if (generated_text && byte_length < org_length)
+                    {
+                        const auto * begin = reinterpret_cast<const UInt8 *>(&(*data_from)[current_offset]);
+                        const auto * end = begin + byte_length;
+                        UTF8::syncBackward(end, begin);
+                        byte_length = end - begin;
+                    }
+                    else if (!generated_text && (tp.charset() == "utf8" || tp.charset() == "utf8mb4"))
                         byte_length = charLengthToByteLengthFromUTF8(
                             reinterpret_cast<const char *>(&(*data_from)[current_offset]),
                             org_length,
@@ -170,7 +183,19 @@ struct TiDBConvertToString
                     byte_length = std::min(byte_length, org_length);
                 }
                 if (byte_length < org_length)
-                    context.getDAGContext()->handleTruncateError("Data Too Long");
+                {
+                    auto * dag = context.getDAGContext();
+                    if (!generated_text)
+                        dag->handleTruncateError("Data Too Long");
+                    else if (
+                        !dag->hasFlag(TiDBSQLFlags::IGNORE_TRUNCATE) && dag->hasFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING))
+                    {
+                        constexpr int mysql_data_too_long = 1406;
+                        dag->appendWarning(
+                            fmt::format("Data Too Long, field len {}, data len {}", tp.flen(), org_length),
+                            mysql_data_too_long);
+                    }
+                }
                 write_buffer.write(reinterpret_cast<const char *>(&(*data_from)[current_offset]), byte_length);
                 if (need_padding && byte_length < static_cast<size_t>(tp.flen()))
                     write_buffer.write(padding_string.data(), tp.flen() - byte_length);

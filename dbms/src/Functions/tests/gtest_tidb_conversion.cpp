@@ -650,6 +650,43 @@ try
 }
 CATCH
 
+TEST_F(TestTidbConversion, castVirtualGeneratedTextAtByteLimit)
+{
+    const String prefix = "fagor" + String(65528, ' ');
+    const String overflow = prefix + "\xe2\xb1\xa5";
+    const String exact_fit = "x" + String(65531, ' ') + "\xe2\xb1\xa5";
+
+    tipb::FieldType target;
+    target.set_tp(TiDB::TypeBlob);
+    target.set_charset("utf8mb4");
+    target.set_flen(65535);
+    const auto input = createColumn<String>({overflow, exact_fit, "small"});
+
+    auto cast = [&] {
+        Block block({input, {nullptr, input.type, "result"}});
+        TiDBConvertToString<DataTypeString, false>::execute(block, {0}, 1, false, target, *context);
+        return block.getByPosition(1);
+    };
+
+    ASSERT_COLUMN_EQ(input, cast()); // Ordinary UTF-8 CAST counts characters.
+    target.set_flag(TiDB::ColumnFlagGeneratedColumn);
+    const auto expected = createColumn<String>({prefix, exact_fit, "small"});
+    auto & dag = getDAGContext();
+    dag.setFlags(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    ASSERT_COLUMN_EQ(expected, cast());
+    EXPECT_EQ(dag.getWarningCount(), 1);
+    std::vector<tipb::Error> warnings;
+    dag.consumeWarnings(warnings);
+    ASSERT_EQ(warnings.size(), 1);
+    EXPECT_EQ(warnings[0].code(), 1406);
+    EXPECT_EQ(warnings[0].msg(), "Data Too Long, field len 65535, data len 65536");
+
+    dag.clearWarnings();
+    dag.addFlag(TiDBSQLFlags::IGNORE_TRUNCATE);
+    ASSERT_COLUMN_EQ(expected, cast());
+    EXPECT_EQ(dag.getWarningCount(), 0);
+}
+
 TEST_F(TestTidbConversion, castIntAsDecimal)
 try
 {

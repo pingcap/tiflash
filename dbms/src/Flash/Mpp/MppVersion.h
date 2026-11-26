@@ -26,7 +26,7 @@ enum MppVersion : int64_t
     MppVersionV0 = 0,
     MppVersionV1,
     MppVersionV2,
-    //
+    MppVersionV3, // Byte-limited casts for virtual generated TEXT columns.
     MppVersionMAX,
 };
 // Make MppVersion formatable by fmtlib
