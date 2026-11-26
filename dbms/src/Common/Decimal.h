@@ -454,7 +454,12 @@ public:
     static Int256 get(PrecType idx)
     {
         // In case DecimalMaxValue::get(IntPrec<Int256>::prec), where IntPrec<Int256>::prec > 65.
-        assert(idx <= decimal_max_prec);
+        if (unlikely(idx > decimal_max_prec))
+            throw TiFlashException(
+                Errors::Decimal::Overflow,
+                "Decimal precision {} exceeds maximum {}",
+                idx,
+                decimal_max_prec);
         return instance().getInternal(idx);
     }
 

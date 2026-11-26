@@ -53,7 +53,7 @@ public:
 
     TunnelPtr getTunnelByReceiverTaskId(const MPPTaskId & id);
 
-    uint16_t getPartitionNum() const { return tunnels.size(); }
+    size_t getPartitionNum() const { return tunnels.size(); }
 
     int getExternalThreadCnt() { return external_thread_cnt; }
     size_t getLocalTunnelCnt() { return local_tunnel_cnt; }

@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/Logger.h>
 #include <Core/ColumnWithTypeAndName.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsTiDBConversion.h>
+#include <TestUtils/AggregationTestUtils.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -32,9 +35,29 @@ const std::string func_name = "tidbDivide";
 class TestDivPrecisionIncre : public DB::tests::FunctionTest
 {
 public:
+    static void SetUpTestCase()
+    {
+        FunctionTest::SetUpTestCase();
+        AggregationTest::SetUpTestCase();
+    }
 };
 
 using DecimalField32 = DecimalField<Decimal32>;
+
+TEST_F(TestDivPrecisionIncre, RejectsNegativeIncrement)
+{
+    // Bypass request validation to exercise the AVG and division scale protections directly.
+    context->getDAGContext()->setDivPrecisionIncrement(-1);
+    const DataTypes argument_types{createDecimal(10, 2)};
+    EXPECT_THROW(AggregateFunctionFactory::instance().get(*context, "avg", argument_types, {}), TiFlashException);
+    EXPECT_THROW(
+        DB::tests::executeFunction(
+            *context,
+            func_name,
+            {createColumn<Decimal64>(std::make_tuple(10, 2), {"1.00", "2.00"}),
+             createColumn<Decimal64>(std::make_tuple(10, 0), {"2", "1"})}),
+        TiFlashException);
+}
 
 TEST_F(TestDivPrecisionIncre, castDecimalAsRealBasic)
 try

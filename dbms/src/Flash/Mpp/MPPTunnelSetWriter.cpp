@@ -362,7 +362,7 @@ void MPPTunnelSetWriterBase::passThroughWrite(
         [&](TrackedMppDataPacketPtr && data, size_t index) { return writeToTunnel(std::move(data), index); });
 }
 
-void MPPTunnelSetWriterBase::partitionWrite(Blocks & blocks, int16_t partition_id)
+void MPPTunnelSetWriterBase::partitionWrite(Blocks & blocks, size_t partition_id)
 {
     auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
     assert(tracked_packet);
@@ -379,7 +379,7 @@ void MPPTunnelSetWriterBase::partitionWrite(Blocks & blocks, int16_t partition_i
 void MPPTunnelSetWriterBase::partitionWrite(
     const Block & header,
     std::vector<MutableColumns> && part_columns,
-    int16_t partition_id,
+    size_t partition_id,
     MPPDataPacketVersion version,
     CompressionMethod compression_method)
 {
@@ -405,7 +405,7 @@ void MPPTunnelSetWriterBase::fineGrainedShuffleWrite(
     size_t bucket_idx,
     UInt64 fine_grained_shuffle_stream_count,
     size_t num_columns,
-    int16_t partition_id,
+    size_t partition_id,
     MPPDataPacketVersion version,
     CompressionMethod compression_method)
 {
@@ -444,7 +444,7 @@ void MPPTunnelSetWriterBase::fineGrainedShuffleWrite(
     size_t bucket_idx,
     UInt64 fine_grained_shuffle_stream_count,
     size_t num_columns,
-    int16_t partition_id)
+    size_t partition_id)
 {
     auto tracked_packet = MPPTunnelSetHelper::ToFineGrainedPacketV0(
         header,
