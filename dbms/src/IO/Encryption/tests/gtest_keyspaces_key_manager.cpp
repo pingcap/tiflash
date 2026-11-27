@@ -73,7 +73,11 @@ public:
     }
 
 protected:
-    void deleteBucket() { ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client); }
+    void deleteBucket()
+    {
+        if (DB::tests::TiFlashTestEnv::isMockedS3Client())
+            ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
+    }
 
 protected:
     FileProviderPtr file_provider;
