@@ -1,0 +1,49 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t;
+mysql> create table test.t (a int);
+mysql> alter table test.t set tiflash replica 1;
+mysql> set tidb_enforce_mpp=1;
+mysql> set tidb_isolation_read_engines='tiflash';
+
+mysql> insert test.t values (null);
+mysql> insert test.t values (100);
+mysql> insert test.t values (-100);
+
+
+mysql> select a, bit_count(a) from test.t;
++------+--------------+
+| a    | bit_count(a) |
++------+--------------+
+| NULL |         NULL |
+|  100 |            3 |
+| -100 |           60 |
++------+--------------+
+
+mysql> drop table if exists test.s;
+mysql> create table test.s (a bigint);
+mysql> alter table test.s set tiflash replica 1;
+
+mysql> insert test.s values (-9223372036854775808);
+mysql> insert test.s values (9223372036854775807);
+
+
+mysql> select a, bit_count(a) from test.s;
++----------------------+--------------+
+| a                    | bit_count(a) |
++----------------------+--------------+
+| -9223372036854775808 |            1 |
+|  9223372036854775807 |           63 |
++----------------------+--------------+
