@@ -67,6 +67,8 @@ public:
     std::pair<StringRef, StringRef> getStringMinMax(size_t pack_index) const;
 
     std::pair<UInt64, UInt64> getUInt64MinMax(size_t pack_index) const;
+    std::pair<UInt64, UInt64> getUInt64MinMax2(size_t pack_index) const;
+
 
     // Convert only a temporary index; the persisted UTC index stays unchanged.
     MinMaxIndexPtr withTimezone(
